@@ -86,7 +86,7 @@ multiplyFilter = SimpleITK.MultiplyImageFilter()
 
 # range(0, imgOriginal.GetDepth()):
 ini = 39
-end = 40
+end = 42
 for i in range(ini, end):
     thresholdFilter.SetOutsideValue(0)
     thresholdFilter.SetLower(2)
@@ -109,16 +109,17 @@ for i in range(ini, end):
     imgMultiply = multiplyFilter.Execute(imgFilter, imgSmooth)
 
     stats = get_stats_without_background(imgMultiply)
-    #+stats['std']
-    thresholdFilter.SetLower(stats['mean']+(stats['std']/3))
+
+    thresholdFilter.SetLower(stats['mean']+stats['std'])
     thresholdFilter.SetUpper(stats['max'])
     imgFilter = thresholdFilter.Execute(imgMultiply)
 
-    sitk_show(first)
+    # sitk_show(first)
 
     fillFilter = SimpleITK.GrayscaleFillholeImageFilter()
     imgFilter = fillFilter.Execute(imgFilter)
     sitk_show(imgFilter)
+    #histogram_without_background(imgFilter)
 
     # addFilter = SimpleITK.AddImageFilter()
     # imgAdd = addFilter.Execute(imgFilter, imgMultiply)
@@ -140,7 +141,7 @@ for i in range(ini, end):
     # sitk_show(imgFilter)
     # hist(imgFilter)
 
-    plt.show()
+plt.show()
 
 # print first.GetPixelIDTypeAsString()
 # print imgFilter.GetPixelIDTypeAsString()
