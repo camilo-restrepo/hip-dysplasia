@@ -33,9 +33,9 @@ PathDicom = "/Volumes/SIN TITULO/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/
 #     ds = dicom.read_file(filenameDCM)
 #     ArrayDicom[:, :, lstFilesDCM.index(filenameDCM)] = ds.pixel_array
 
-
 #pylab.imshow(ds.pixel_array, cmap=pylab.cm.bone)
 #pylab.show()
+
 
 def sitk_show(img, title=None, margin=0.05, dpi=40):
     nda = SimpleITK.GetArrayFromImage(img)
@@ -50,61 +50,102 @@ def sitk_show(img, title=None, margin=0.05, dpi=40):
 
     if title:
         plt.title(title)
+#    plt.show()
 
-    plt.show()
+
+def np_show(img):
+    plt.imshow(img, cmap='Greys_r')
+
+
+def histogram_without_background(img):
+    hist_filter = SimpleITK.MinimumMaximumImageFilter()
+    hist_filter.Execute(img)
+    histogram = np.histogram(SimpleITK.GetArrayFromImage(img), bins=np.arange(hist_filter.GetMinimum(),
+                                                                              hist_filter.GetMaximum()))
+    plt.figure(2)
+    histogram[0][0] = 0
+    histogram[1][0] = 0
+    plt.plot(histogram[1][:-1], histogram[0], lw=1)
+
+
+def get_stats_without_background(img):
+    img_array = SimpleITK.GetArrayFromImage(img)
+    img_array = img_array[img_array > 0]
+    return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
+
 
 reader = SimpleITK.ImageSeriesReader()
 filenamesDICOM = reader.GetGDCMSeriesFileNames(PathDicom)
 reader.SetFileNames(filenamesDICOM)
 imgOriginal = reader.Execute()
 
-first = imgOriginal[:, :, 40]
-
-minMaxFilter = SimpleITK.MinimumMaximumImageFilter()
-minMaxFilter.Execute(first)
-
-first += abs(minMaxFilter.GetMinimum())
-
-imgSmooth = SimpleITK.CurvatureFlow(image1=first,
-                                    timeStep=0.125,
-                                    numberOfIterations=5)
-minMaxFilter.Execute(imgSmooth)
-
-# medianFilter = SimpleITK.MedianImageFilter()
-# medianFilter.SetRadius([1, 1, 1])
-# imgMedian = medianFilter.Execute(first)
-
-otsuFilter = SimpleITK.OtsuMultipleThresholdsImageFilter()
-otsuFilter.SetNumberOfThresholds(2)
-imgFilter = otsuFilter.Execute(imgSmooth)
-
 thresholdFilter = SimpleITK.ThresholdImageFilter()
-thresholdFilter.SetOutsideValue(0)
-thresholdFilter.SetLower(2)
-thresholdFilter.SetUpper(2)
-imgFilter = thresholdFilter.Execute(imgFilter)
-imgFilter /= 2
-imgFilter = SimpleITK.Cast(imgFilter, imgSmooth.GetPixelIDValue())
-
+statsFilter = SimpleITK.StatisticsImageFilter()
+otsuFilter = SimpleITK.OtsuMultipleThresholdsImageFilter()
 multiplyFilter = SimpleITK.MultiplyImageFilter()
-imgFilter = multiplyFilter.Execute(imgFilter, imgSmooth)
 
-# otsuFilter.SetNumberOfThresholds(2)
-# imgFilter = otsuFilter.Execute(imgFilter)
+# range(0, imgOriginal.GetDepth()):
+ini = 39
+end = 40
+for i in range(ini, end):
+    thresholdFilter.SetOutsideValue(0)
+    thresholdFilter.SetLower(2)
+    thresholdFilter.SetUpper(2)
+    first = imgOriginal[:, :, i]
 
-sobelFilter = SimpleITK.SobelEdgeDetectionImageFilter()
-imgFilter = sobelFilter.Execute(imgFilter)
+    statsFilter.Execute(first)
+    first += abs(statsFilter.GetMinimum())
+    imgSmooth = SimpleITK.CurvatureFlow(image1=first, timeStep=0.125, numberOfIterations=5)
 
-#sitk_show(imgFilter)
+    # medianFilter = SimpleITK.MedianImageFilter()
+    # medianFilter.SetRadius([1, 1, 1])
+    # imgMedian = medianFilter.Execute(first)
 
-minMaxFilter.Execute(imgFilter)
-hist = np.histogram(SimpleITK.GetArrayFromImage(imgFilter), bins=np.arange(minMaxFilter.GetMinimum(),
-                                                                           minMaxFilter.GetMaximum()))
-hist[0][0] = 0
-hist[1][0] = 0
-plt.plot(hist[1][:-1], hist[0], lw=2)
-plt.show()
+    otsuFilter.SetNumberOfThresholds(2)
+    imgFilter = otsuFilter.Execute(imgSmooth)
+    imgFilter = thresholdFilter.Execute(imgFilter)
+    imgFilter /= 2
+    imgFilter = SimpleITK.Cast(imgFilter, imgSmooth.GetPixelIDValue())
+    imgMultiply = multiplyFilter.Execute(imgFilter, imgSmooth)
 
+    stats = get_stats_without_background(imgMultiply)
+    #+stats['std']
+    thresholdFilter.SetLower(stats['mean']+(stats['std']/3))
+    thresholdFilter.SetUpper(stats['max'])
+    imgFilter = thresholdFilter.Execute(imgMultiply)
+
+    sitk_show(first)
+
+    fillFilter = SimpleITK.GrayscaleFillholeImageFilter()
+    imgFilter = fillFilter.Execute(imgFilter)
+    sitk_show(imgFilter)
+
+    # addFilter = SimpleITK.AddImageFilter()
+    # imgAdd = addFilter.Execute(imgFilter, imgMultiply)
+
+    # sobelFilter = SimpleITK.SobelEdgeDetectionImageFilter()
+    # imgFilter = sobelFilter.Execute(imgMultiply)
+
+    # sitk_show(imgFilter)
+    # np_show(SimpleITK.GetArrayFromImage(imgFilter))
+    #histogram_without_background(imgFilter)
+
+    # imgFilter = addFilter.Execute(imgFilter, imgAdd)
+
+    # statsFilter.Execute(imgFilter)
+    # thresholdFilter.SetLower(statsFilter.GetMean()+statsFilter.GetSigma())
+    # thresholdFilter.SetUpper(statsFilter.GetMaximum())
+    # imgFilter = thresholdFilter.Execute(imgFilter)
+    #
+    # sitk_show(imgFilter)
+    # hist(imgFilter)
+
+    plt.show()
 
 # print first.GetPixelIDTypeAsString()
 # print imgFilter.GetPixelIDTypeAsString()
+
+    # image = SimpleITK.GetArrayFromImage(imgFilter)
+    # u = image[0][0]
+    # imgBone = image
+    # imgNoBone = image
