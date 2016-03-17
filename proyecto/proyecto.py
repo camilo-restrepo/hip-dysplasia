@@ -1,12 +1,13 @@
-import dicom
-import os
+# import dicom
+# import os
+# import pylab
 import numpy as np
-import pylab
 import SimpleITK
 import matplotlib.pyplot as plt
 
+PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 
-PathDicom = "/Volumes/SIN TITULO/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+
 # lstFilesDCM = []
 # for dirName, subdirList, fileList in os.walk(PathDicom):
 #     for filename in fileList:
@@ -33,24 +34,26 @@ PathDicom = "/Volumes/SIN TITULO/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/
 #     ds = dicom.read_file(filenameDCM)
 #     ArrayDicom[:, :, lstFilesDCM.index(filenameDCM)] = ds.pixel_array
 
-#pylab.imshow(ds.pixel_array, cmap=pylab.cm.bone)
-#pylab.show()
+# pylab.imshow(ds.pixel_array, cmap=pylab.cm.bone)
+# pylab.show()
 
 
 def sitk_show(img, title=None, margin=0.05, dpi=40):
     nda = SimpleITK.GetArrayFromImage(img)
     spacing = img.GetSpacing()
     figsize = (1 + margin) * nda.shape[0] / dpi, (1 + margin) * nda.shape[1] / dpi
-    extent = (0, nda.shape[1]*spacing[1], nda.shape[0]*spacing[0], 0)
+    extent = (0, nda.shape[1] * spacing[1], nda.shape[0] * spacing[0], 0)
     fig = plt.figure(figsize=figsize, dpi=dpi)
-    ax = fig.add_axes([margin, margin, 1 - 2*margin, 1 - 2*margin])
+    ax = fig.add_axes([margin, margin, 1 - 2 * margin, 1 - 2 * margin])
 
     plt.set_cmap("gray")
     ax.imshow(nda, extent=extent, interpolation=None)
 
     if title:
         plt.title(title)
-#    plt.show()
+
+
+# plt.show()
 
 
 def np_show(img):
@@ -72,6 +75,36 @@ def get_stats_without_background(img):
     img_array = SimpleITK.GetArrayFromImage(img)
     img_array = img_array[img_array > 0]
     return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
+
+
+def pixel_belongs_to_boundary(img, x, y, z):
+    imgArray = SimpleITK.GetArrayFromImage(img)
+    pixel = imgArray[x][y]
+    neighbors = [
+        imgArray[x - 1][y - 1],
+        imgArray[x - 1][y],
+        imgArray[x - 1][y + 1],
+        imgArray[x][y - 1],
+        imgArray[x][y + 1],
+        imgArray[x + 1][y - 1],
+        imgArray[x + 1][y],
+        imgArray[x + 1][y + 1]
+    ]
+
+    for n in neighbors:
+        if pixel == 0 and n != 0:
+            return True
+        elif pixel != 0 and n == 0:
+            return True
+        return False
+    return False
+
+
+def compute_boundary(img):
+    imgArray = SimpleITK.GetArrayFromImage(img)
+    e_b = np.zeros_like(imgArray)
+    for index, x in np.ndenumerate(imgArray):
+        
 
 
 reader = SimpleITK.ImageSeriesReader()
@@ -110,7 +143,7 @@ for i in range(ini, end):
 
     stats = get_stats_without_background(imgMultiply)
 
-    thresholdFilter.SetLower(stats['mean']+stats['std'])
+    thresholdFilter.SetLower(stats['mean'] + stats['std'])
     thresholdFilter.SetUpper(stats['max'])
     imgFilter = thresholdFilter.Execute(imgMultiply)
 
@@ -118,8 +151,11 @@ for i in range(ini, end):
 
     fillFilter = SimpleITK.GrayscaleFillholeImageFilter()
     imgFilter = fillFilter.Execute(imgFilter)
-    sitk_show(imgFilter)
-    #histogram_without_background(imgFilter)
+    #sitk_show(imgFilter)
+
+    compute_boundary(imgFilter)
+
+    # histogram_without_background(imgFilter)
 
     # addFilter = SimpleITK.AddImageFilter()
     # imgAdd = addFilter.Execute(imgFilter, imgMultiply)
@@ -129,7 +165,7 @@ for i in range(ini, end):
 
     # sitk_show(imgFilter)
     # np_show(SimpleITK.GetArrayFromImage(imgFilter))
-    #histogram_without_background(imgFilter)
+    # histogram_without_background(imgFilter)
 
     # imgFilter = addFilter.Execute(imgFilter, imgAdd)
 
@@ -146,7 +182,7 @@ plt.show()
 # print first.GetPixelIDTypeAsString()
 # print imgFilter.GetPixelIDTypeAsString()
 
-    # image = SimpleITK.GetArrayFromImage(imgFilter)
-    # u = image[0][0]
-    # imgBone = image
-    # imgNoBone = image
+# image = SimpleITK.GetArrayFromImage(imgFilter)
+# u = image[0][0]
+# imgBone = image
+# imgNoBone = image
