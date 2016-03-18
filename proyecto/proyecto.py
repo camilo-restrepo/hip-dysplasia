@@ -4,6 +4,7 @@
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
+from sklearn.naive_bayes import GaussianNB
 
 PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 
@@ -77,8 +78,7 @@ def get_stats_without_background(img):
     return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
 
 
-def pixel_belongs_to_boundary(img, x, y, z):
-    imgArray = SimpleITK.GetArrayFromImage(img)
+def pixel_belongs_to_boundary(imgArray, x, y, z):
     pixel = imgArray[x][y]
     neighbors = [
         imgArray[x - 1][y - 1],
@@ -97,14 +97,61 @@ def pixel_belongs_to_boundary(img, x, y, z):
         elif pixel != 0 and n == 0:
             return True
         return False
+
     return False
 
 
 def compute_boundary(img):
     imgArray = SimpleITK.GetArrayFromImage(img)
     e_b = np.zeros_like(imgArray)
+    width = img.GetWidth()
+    height = img.GetHeight()
+    e_b_list = []
     for index, x in np.ndenumerate(imgArray):
-        
+        if 0 < index[0] < width-1 and 0 < index[1] < height-1:
+            if pixel_belongs_to_boundary(imgArray, index[0], index[1], 0):
+                e_b[index[0]][index[1]] = x
+                e_b_list.append(index)
+    return {'img': e_b, 'e_b': e_b_list}
+
+
+def recalculate_segmentation(img, e_b):
+    width = img.GetWidth()
+    height = img.GetHeight()
+    original = SimpleITK.GetArrayFromImage(img)
+    segmentation_error = []
+    clf = GaussianNB()
+
+    for px in e_b:
+        x = px[0]
+        y = px[1]
+        if 0 < x < width-1 and 0 < y < height-1:
+            y_real = []
+            neighbors = [
+                original[x - 1][y - 1],
+                original[x - 1][y],
+                original[x - 1][y + 1],
+                original[x][y - 1],
+                original[x][y + 1],
+                original[x + 1][y - 1],
+                original[x + 1][y],
+                original[x + 1][y + 1]
+            ]
+            for n in neighbors:
+                if n != 0:
+                    y_real.append(1)
+                else:
+                    y_real.append(0)
+
+            neighbors = np.reshape(neighbors, (len(neighbors), 1))
+
+            clf.fit(neighbors, y_real)
+            y_predict = clf.predict(original[x][y])[0]
+
+            # (y_predict == 0 and original[x][y] != 0) or (y_predict == 1 and original[x][y] == 0)
+            if y_predict == 0 and original[x][y] != 0:
+                segmentation_error.append(px)
+    return segmentation_error
 
 
 reader = SimpleITK.ImageSeriesReader()
@@ -118,8 +165,8 @@ otsuFilter = SimpleITK.OtsuMultipleThresholdsImageFilter()
 multiplyFilter = SimpleITK.MultiplyImageFilter()
 
 # range(0, imgOriginal.GetDepth()):
-ini = 39
-end = 42
+ini = 87
+end = 90
 for i in range(ini, end):
     thresholdFilter.SetOutsideValue(0)
     thresholdFilter.SetLower(2)
@@ -151,31 +198,24 @@ for i in range(ini, end):
 
     fillFilter = SimpleITK.GrayscaleFillholeImageFilter()
     imgFilter = fillFilter.Execute(imgFilter)
-    #sitk_show(imgFilter)
+    sitk_show(imgFilter)
 
-    compute_boundary(imgFilter)
-
+    # ------------------- Adaptative Thresholding Segmentation --------------------
+    # previous_error = 0
+    # while True:
+    #     boundary = compute_boundary(imgFilter)
+    #     error = recalculate_segmentation(imgFilter, boundary['e_b'])
+    #     imagen = SimpleITK.GetArrayFromImage(imgFilter)
+    #     for e in error:
+    #         imagen[e[0]][e[1]] = 0
+    #     imgFilter = SimpleITK.GetImageFromArray(imagen)
+    #     if len(error) == 0 or len(error) == previous_error:
+    #         break
+    #     previous_error = len(error)
+    # sitk_show(imgFilter)
+    # -----------------------------------------------------------------------------
     # histogram_without_background(imgFilter)
 
-    # addFilter = SimpleITK.AddImageFilter()
-    # imgAdd = addFilter.Execute(imgFilter, imgMultiply)
-
-    # sobelFilter = SimpleITK.SobelEdgeDetectionImageFilter()
-    # imgFilter = sobelFilter.Execute(imgMultiply)
-
-    # sitk_show(imgFilter)
-    # np_show(SimpleITK.GetArrayFromImage(imgFilter))
-    # histogram_without_background(imgFilter)
-
-    # imgFilter = addFilter.Execute(imgFilter, imgAdd)
-
-    # statsFilter.Execute(imgFilter)
-    # thresholdFilter.SetLower(statsFilter.GetMean()+statsFilter.GetSigma())
-    # thresholdFilter.SetUpper(statsFilter.GetMaximum())
-    # imgFilter = thresholdFilter.Execute(imgFilter)
-    #
-    # sitk_show(imgFilter)
-    # hist(imgFilter)
 
 plt.show()
 
