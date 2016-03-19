@@ -1,23 +1,25 @@
-# import dicom
-# import os
-# import pylab
+import dicom
+import os
+import pylab
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
 from sklearn.naive_bayes import GaussianNB
 
-PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
-
+PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+outPath = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/out/"
 
 # lstFilesDCM = []
 # for dirName, subdirList, fileList in os.walk(PathDicom):
 #     for filename in fileList:
 #         if ".dcm" in filename.lower():  # check whether the file's DICOM
 #             lstFilesDCM.append(os.path.join(dirName, filename))
-
-# print lstFilesDCM
-
+#
 # RefDs = dicom.read_file(lstFilesDCM[0])
+#
+# print RefDs.RescaleSlope
+# print RefDs.RescaleIntercept
+
 # ConstPixelDims = (int(RefDs.Rows), int(RefDs.Columns), len(lstFilesDCM))
 # ConstPixelSpacing = (float(RefDs.PixelSpacing[0]), float(RefDs.PixelSpacing[1]), float(RefDs.SliceThickness))
 
@@ -39,25 +41,14 @@ PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PEL
 # pylab.show()
 
 
-def sitk_show(img, title=None, margin=0.05, dpi=40):
-    nda = SimpleITK.GetArrayFromImage(img)
-    spacing = img.GetSpacing()
-    figsize = (1 + margin) * nda.shape[0] / dpi, (1 + margin) * nda.shape[1] / dpi
-    extent = (0, nda.shape[1] * spacing[1], nda.shape[0] * spacing[0], 0)
-    fig = plt.figure(figsize=figsize, dpi=dpi)
-    ax = fig.add_axes([margin, margin, 1 - 2 * margin, 1 - 2 * margin])
-
-    plt.set_cmap("gray")
-    ax.imshow(nda, extent=extent, interpolation=None)
-
-    if title:
-        plt.title(title)
-
-
-# plt.show()
+def sitk_show(img):
+    img_array = SimpleITK.GetArrayFromImage(img)
+    plt.figure()
+    plt.imshow(img_array, cmap='Greys_r')
 
 
 def np_show(img):
+    plt.figure()
     plt.imshow(img, cmap='Greys_r')
 
 
@@ -78,41 +69,45 @@ def get_stats_without_background(img):
     return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
 
 
-def pixel_belongs_to_boundary(imgArray, x, y, z):
-    pixel = imgArray[x][y]
-    neighbors = [
-        imgArray[x - 1][y - 1],
-        imgArray[x - 1][y],
-        imgArray[x - 1][y + 1],
-        imgArray[x][y - 1],
-        imgArray[x][y + 1],
-        imgArray[x + 1][y - 1],
-        imgArray[x + 1][y],
-        imgArray[x + 1][y + 1]
-    ]
+def pixel_belongs_to_boundary(img_array, x, y, z):
+    pixel = img_array[x, y, z]
+    if pixel != 0:
+        neighbors = [
+            img_array[x - 1][y - 1][z],
+            img_array[x - 1][y][z],
+            img_array[x - 1][y + 1][z],
+            img_array[x][y - 1][z],
+            img_array[x][y + 1][z],
+            img_array[x + 1][y - 1][z],
+            img_array[x + 1][y][z],
+            img_array[x + 1][y + 1][z],
+            img_array[x][y][z-1],
+            img_array[x][y][z+1],
+        ]
 
-    for n in neighbors:
-        if pixel == 0 and n != 0:
-            return True
-        elif pixel != 0 and n == 0:
-            return True
-        return False
-
+        for n in neighbors:
+            if n == 0:
+                return True
     return False
 
 
-def compute_boundary(img):
-    imgArray = SimpleITK.GetArrayFromImage(img)
-    e_b = np.zeros_like(imgArray)
-    width = img.GetWidth()
-    height = img.GetHeight()
-    e_b_list = []
-    for index, x in np.ndenumerate(imgArray):
-        if 0 < index[0] < width-1 and 0 < index[1] < height-1:
-            if pixel_belongs_to_boundary(imgArray, index[0], index[1], 0):
-                e_b[index[0]][index[1]] = x
-                e_b_list.append(index)
-    return {'img': e_b, 'e_b': e_b_list}
+def compute_boundary(ct_array):
+    width = ct_array.shape[0]
+    height = ct_array.shape[1]
+    depth = ct_array.shape[2]
+    boundaries_array = np.zeros((width, height, depth))
+    e_b = {}
+
+    for z in range(0, depth):
+        e_b_list = []
+        for index, x in np.ndenumerate(ct_array[:, :, z]):
+            if 0 < index[0] < width-1 and 0 < index[1] < height-1 and 0 < z < depth-1:
+                if pixel_belongs_to_boundary(ct_array, index[0], index[1], z):
+                    boundaries_array[index[0], index[1], z] = x
+                    e_b_list.append(index)
+        e_b[z] = e_b_list
+
+    return {'boundaries_array': boundaries_array, 'e_b': e_b}
 
 
 def recalculate_segmentation(img, e_b):
@@ -155,50 +150,62 @@ def recalculate_segmentation(img, e_b):
 
 
 reader = SimpleITK.ImageSeriesReader()
-filenamesDICOM = reader.GetGDCMSeriesFileNames(PathDicom)
-reader.SetFileNames(filenamesDICOM)
-imgOriginal = reader.Execute()
+filenames_dicom = reader.GetGDCMSeriesFileNames(PathDicom)
+reader.SetFileNames(filenames_dicom)
+img_original = reader.Execute()
 
-thresholdFilter = SimpleITK.ThresholdImageFilter()
-statsFilter = SimpleITK.StatisticsImageFilter()
-otsuFilter = SimpleITK.OtsuMultipleThresholdsImageFilter()
-multiplyFilter = SimpleITK.MultiplyImageFilter()
+threshold_filter = SimpleITK.ThresholdImageFilter()
+threshold_filter.SetOutsideValue(0)
+otsu_filter = SimpleITK.OtsuMultipleThresholdsImageFilter()
+multiply_filter = SimpleITK.MultiplyImageFilter()
+binary_threshold_filter = SimpleITK.BinaryThresholdImageFilter()
+binary_threshold_filter.SetInsideValue(1)
+binary_threshold_filter.SetOutsideValue(0)
+morphological_filter = SimpleITK.GrayscaleMorphologicalClosingImageFilter()
+grayscale_fill_filter = SimpleITK.GrayscaleFillholeImageFilter()
+binary_fill_filter = SimpleITK.BinaryFillholeImageFilter()
 
-# range(0, imgOriginal.GetDepth()):
-ini = 87
-end = 90
+
+def initial_binary_threshold(image):
+    img_smooth = SimpleITK.CurvatureFlow(image1=image, timeStep=0.125, numberOfIterations=5)
+    otsu_filter.SetNumberOfThresholds(2)
+    img_filter = otsu_filter.Execute(img_smooth)
+    threshold_filter.SetLower(2)
+    threshold_filter.SetUpper(2)
+    img_filter = threshold_filter.Execute(img_filter)
+    img_filter /= 2
+    img_filter = SimpleITK.Cast(img_filter, img_smooth.GetPixelIDValue())
+    img_multiply = multiply_filter.Execute(img_filter, img_smooth)
+
+    stats = get_stats_without_background(img_multiply)
+    threshold_filter.SetLower(stats['mean'] + stats['std'])
+    threshold_filter.SetUpper(float(stats['max']))
+    img_filter = threshold_filter.Execute(img_multiply)
+
+    stats = get_stats_without_background(img_filter)
+    binary_threshold_filter.SetLowerThreshold(stats['min'])
+    binary_threshold_filter.SetUpperThreshold(stats['max'])
+    img_filter = binary_threshold_filter.Execute(img_filter)
+
+    morphological_filter.SetKernelRadius([1, 1])
+    img_filter = morphological_filter.Execute(img_filter)
+    img_filter = grayscale_fill_filter.Execute(img_filter)
+    return img_filter
+
+
+thresholded_ct_scan_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
+for i in range(0, img_original.GetDepth()):
+    thresholded_ct_scan_array[:, :, i] = SimpleITK.GetArrayFromImage(initial_binary_threshold(img_original[:, :, i]))
+
+boundaries = compute_boundary(thresholded_ct_scan_array)
+
+ini = 37
+end = 42
 for i in range(ini, end):
-    thresholdFilter.SetOutsideValue(0)
-    thresholdFilter.SetLower(2)
-    thresholdFilter.SetUpper(2)
-    first = imgOriginal[:, :, i]
+    np_show(thresholded_ct_scan_array[:, :, i])
+    np_show(boundaries['boundaries_array'][:, :, i])
 
-    statsFilter.Execute(first)
-    first += abs(statsFilter.GetMinimum())
-    imgSmooth = SimpleITK.CurvatureFlow(image1=first, timeStep=0.125, numberOfIterations=5)
-
-    # medianFilter = SimpleITK.MedianImageFilter()
-    # medianFilter.SetRadius([1, 1, 1])
-    # imgMedian = medianFilter.Execute(first)
-
-    otsuFilter.SetNumberOfThresholds(2)
-    imgFilter = otsuFilter.Execute(imgSmooth)
-    imgFilter = thresholdFilter.Execute(imgFilter)
-    imgFilter /= 2
-    imgFilter = SimpleITK.Cast(imgFilter, imgSmooth.GetPixelIDValue())
-    imgMultiply = multiplyFilter.Execute(imgFilter, imgSmooth)
-
-    stats = get_stats_without_background(imgMultiply)
-
-    thresholdFilter.SetLower(stats['mean'] + stats['std'])
-    thresholdFilter.SetUpper(stats['max'])
-    imgFilter = thresholdFilter.Execute(imgMultiply)
-
-    # sitk_show(first)
-
-    fillFilter = SimpleITK.GrayscaleFillholeImageFilter()
-    imgFilter = fillFilter.Execute(imgFilter)
-    sitk_show(imgFilter)
+plt.show()
 
     # ------------------- Adaptative Thresholding Segmentation --------------------
     # previous_error = 0
@@ -214,15 +221,11 @@ for i in range(ini, end):
     #     previous_error = len(error)
     # sitk_show(imgFilter)
     # -----------------------------------------------------------------------------
-    # histogram_without_background(imgFilter)
-
-
-plt.show()
+    #
 
 # print first.GetPixelIDTypeAsString()
 # print imgFilter.GetPixelIDTypeAsString()
 
-# image = SimpleITK.GetArrayFromImage(imgFilter)
-# u = image[0][0]
-# imgBone = image
-# imgNoBone = image
+
+# for i in range(0, imgOriginal.GetDepth()):
+#     tifffile.imsave(outPath+'test-'+'{:03d}'.format(i)+'.tif', boundaries['boundaries_array'][:, :, i])
