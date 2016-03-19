@@ -1,6 +1,3 @@
-import dicom
-import os
-import pylab
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
@@ -235,6 +232,6 @@ plt.show()
 # print first.GetPixelIDTypeAsString()
 # print imgFilter.GetPixelIDTypeAsString()
 
-
+# Scikit Image
 # for i in range(0, imgOriginal.GetDepth()):
 #     tifffile.imsave(outPath+'test-'+'{:03d}'.format(i)+'.tif', boundaries['boundaries_array'][:, :, i])
