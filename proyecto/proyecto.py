@@ -4,7 +4,6 @@ import pylab
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
-from sklearn.naive_bayes import GaussianNB
 
 PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 outPath = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/out/"
@@ -101,52 +100,54 @@ def compute_boundary(ct_array):
     for z in range(0, depth):
         e_b_list = []
         for index, x in np.ndenumerate(ct_array[:, :, z]):
-            if 0 < index[0] < width-1 and 0 < index[1] < height-1 and 0 < z < depth-1:
-                if pixel_belongs_to_boundary(ct_array, index[0], index[1], z):
-                    boundaries_array[index[0], index[1], z] = x
-                    e_b_list.append(index)
-        e_b[z] = e_b_list
+            if x != 0:
+                if 0 < index[0] < width-1 and 0 < index[1] < height-1 and 0 < z < depth-1:
+                    if pixel_belongs_to_boundary(ct_array, index[0], index[1], z):
+                        boundaries_array[index[0], index[1], z] = x
+                        e_b_list.append(index)
+                e_b[z] = e_b_list
 
     return {'boundaries_array': boundaries_array, 'e_b': e_b}
 
 
-def recalculate_segmentation(img, e_b):
-    width = img.GetWidth()
-    height = img.GetHeight()
-    original = SimpleITK.GetArrayFromImage(img)
-    segmentation_error = []
-    clf = GaussianNB()
-
-    for px in e_b:
-        x = px[0]
-        y = px[1]
-        if 0 < x < width-1 and 0 < y < height-1:
-            y_real = []
-            neighbors = [
-                original[x - 1][y - 1],
-                original[x - 1][y],
-                original[x - 1][y + 1],
-                original[x][y - 1],
-                original[x][y + 1],
-                original[x + 1][y - 1],
-                original[x + 1][y],
-                original[x + 1][y + 1]
-            ]
-            for n in neighbors:
-                if n != 0:
-                    y_real.append(1)
-                else:
-                    y_real.append(0)
-
-            neighbors = np.reshape(neighbors, (len(neighbors), 1))
-
-            clf.fit(neighbors, y_real)
-            y_predict = clf.predict(original[x][y])[0]
-
-            # (y_predict == 0 and original[x][y] != 0) or (y_predict == 1 and original[x][y] == 0)
-            if y_predict == 0 and original[x][y] != 0:
-                segmentation_error.append(px)
-    return segmentation_error
+# def recalculate_segmentation(ct_array, e_b):
+#     width = ct_array.shape[0]
+#     height = ct_array.shape[1]
+#     depth = ct_array.shape[2]
+#
+#     segmentation_error = []
+#     clf = GaussianNB()
+#
+#     for px in e_b:
+#         x = px[0]
+#         y = px[1]
+#         if 0 < x < width-1 and 0 < y < height-1:
+#             y_real = []
+#             neighbors = [
+#                 original[x - 1][y - 1],
+#                 original[x - 1][y],
+#                 original[x - 1][y + 1],
+#                 original[x][y - 1],
+#                 original[x][y + 1],
+#                 original[x + 1][y - 1],
+#                 original[x + 1][y],
+#                 original[x + 1][y + 1]
+#             ]
+#             for n in neighbors:
+#                 if n != 0:
+#                     y_real.append(1)
+#                 else:
+#                     y_real.append(0)
+#
+#             neighbors = np.reshape(neighbors, (len(neighbors), 1))
+#
+#             clf.fit(neighbors, y_real)
+#             y_predict = clf.predict(original[x][y])[0]
+#
+#             # (y_predict == 0 and original[x][y] != 0) or (y_predict == 1 and original[x][y] == 0)
+#             if y_predict == 0 and original[x][y] != 0:
+#                 segmentation_error.append(px)
+#     return segmentation_error
 
 
 reader = SimpleITK.ImageSeriesReader()
@@ -190,20 +191,28 @@ def initial_binary_threshold(image):
     morphological_filter.SetKernelRadius([1, 1])
     img_filter = morphological_filter.Execute(img_filter)
     img_filter = grayscale_fill_filter.Execute(img_filter)
+    # img_filter = SimpleITK.Cast(img_filter, image.GetPixelIDValue())
     return img_filter
 
 
 thresholded_ct_scan_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
+
 for i in range(0, img_original.GetDepth()):
     thresholded_ct_scan_array[:, :, i] = SimpleITK.GetArrayFromImage(initial_binary_threshold(img_original[:, :, i]))
 
-boundaries = compute_boundary(thresholded_ct_scan_array)
+# boundaries = compute_boundary(thresholded_ct_scan_array)
 
 ini = 37
 end = 42
 for i in range(ini, end):
-    np_show(thresholded_ct_scan_array[:, :, i])
-    np_show(boundaries['boundaries_array'][:, :, i])
+    temp = SimpleITK.GetImageFromArray(thresholded_ct_scan_array[:, :, i])
+    temp = SimpleITK.Cast(temp, img_original.GetPixelIDValue())
+    temp.CopyInformation(img_original[:, :, i])
+    m = multiply_filter.Execute(img_original[:, :, i], temp)
+    sitk_show(img_original[:, :, i])
+    sitk_show(m)
+    #
+    # np_show(boundaries['boundaries_array'][:, :, i])
 
 plt.show()
 
