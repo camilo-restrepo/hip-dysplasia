@@ -1,9 +1,13 @@
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
+from skimage import morphology
 
-PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
-outPath = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/out/"
+# PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+# outPath = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/out/"
+
+PathDicom = "D:\imagenes\ALMANZA_RUIZ_JUAN_CARLOS\TAC_DE_PELVIS - 84441\_Bone_30_2"
+outPath = "D:\imagenes\out"
 
 # lstFilesDCM = []
 # for dirName, subdirList, fileList in os.walk(PathDicom):
@@ -62,6 +66,11 @@ def histogram_without_background(img):
 def get_stats_without_background(img):
     img_array = SimpleITK.GetArrayFromImage(img)
     img_array = img_array[img_array > 0]
+    return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
+
+
+def get_stats(img):
+    img_array = SimpleITK.GetArrayFromImage(img)
     return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
 
 
@@ -152,6 +161,9 @@ filenames_dicom = reader.GetGDCMSeriesFileNames(PathDicom)
 reader.SetFileNames(filenames_dicom)
 img_original = reader.Execute()
 
+smooth_filter = SimpleITK.CurvatureFlowImageFilter()
+smooth_filter.SetTimeStep(0.125)
+smooth_filter.SetNumberOfIterations(5)
 threshold_filter = SimpleITK.ThresholdImageFilter()
 threshold_filter.SetOutsideValue(0)
 otsu_filter = SimpleITK.OtsuMultipleThresholdsImageFilter()
@@ -160,12 +172,17 @@ binary_threshold_filter = SimpleITK.BinaryThresholdImageFilter()
 binary_threshold_filter.SetInsideValue(1)
 binary_threshold_filter.SetOutsideValue(0)
 morphological_filter = SimpleITK.GrayscaleMorphologicalClosingImageFilter()
+morphological_filter.SetKernelRadius([1, 1])
 grayscale_fill_filter = SimpleITK.GrayscaleFillholeImageFilter()
 binary_fill_filter = SimpleITK.BinaryFillholeImageFilter()
+medianFilter = SimpleITK.MedianImageFilter()
+medianFilter.SetRadius([2, 2, 2])
+# DISTRIBUCION DEL RUIDO OBTENIDA CON IMAGEJ: Mean: -1021.905 Std: 44.194
 
 
 def initial_binary_threshold(image):
-    img_smooth = SimpleITK.CurvatureFlow(image1=image, timeStep=0.125, numberOfIterations=5)
+    # Segmentacion del cuerpo
+    img_smooth = smooth_filter.Execute(image)
     otsu_filter.SetNumberOfThresholds(2)
     img_filter = otsu_filter.Execute(img_smooth)
     threshold_filter.SetLower(2)
@@ -175,41 +192,59 @@ def initial_binary_threshold(image):
     img_filter = SimpleITK.Cast(img_filter, img_smooth.GetPixelIDValue())
     img_multiply = multiply_filter.Execute(img_filter, img_smooth)
 
-    stats = get_stats_without_background(img_multiply)
-    threshold_filter.SetLower(stats['mean'] + stats['std'])
-    threshold_filter.SetUpper(float(stats['max']))
-    img_filter = threshold_filter.Execute(img_multiply)
+    # Segmentacion de los huesos
+    otsu_filter.SetNumberOfThresholds(1)
+    img_filter = otsu_filter.Execute(img_multiply)
 
-    stats = get_stats_without_background(img_filter)
-    binary_threshold_filter.SetLowerThreshold(stats['min'])
-    binary_threshold_filter.SetUpperThreshold(stats['max'])
-    img_filter = binary_threshold_filter.Execute(img_filter)
+    # stats = get_stats_without_background(img_multiply)
+    # threshold_filter.SetLower(stats['mean'] + stats['std'])
+    # threshold_filter.SetUpper(float(stats['max']))
+    # img_filter = threshold_filter.Execute(img_multiply)
+    # stats = get_stats_without_background(img_filter)
+    # binary_threshold_filter.SetLowerThreshold(stats['min'])
+    # binary_threshold_filter.SetUpperThreshold(stats['max'])
+    # img_filter = binary_threshold_filter.Execute(img_filter)
 
-    morphological_filter.SetKernelRadius([1, 1])
+    # Rellenar huecos
     img_filter = morphological_filter.Execute(img_filter)
     img_filter = grayscale_fill_filter.Execute(img_filter)
-    # img_filter = SimpleITK.Cast(img_filter, image.GetPixelIDValue())
+    img_filter = SimpleITK.Cast(img_filter, image.GetPixelIDValue())
     return img_filter
 
+
+def get_segmented_image(original):
+    mask = initial_binary_threshold(original)
+    # mask = SimpleITK.Cast(mask, original.GetPixelIDValue())
+    mask.CopyInformation(original)
+    m = multiply_filter.Execute(original, mask)
+    threshold_filter.SetOutsideValue(0)
+    stats = get_stats(m)
+    threshold_filter.SetLower(0)
+    threshold_filter.SetUpper(float(stats['max']))
+    m = threshold_filter.Execute(m)
+    return m
 
 thresholded_ct_scan_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 
 for i in range(0, img_original.GetDepth()):
     thresholded_ct_scan_array[:, :, i] = SimpleITK.GetArrayFromImage(initial_binary_threshold(img_original[:, :, i]))
 
-# boundaries = compute_boundary(thresholded_ct_scan_array)
+boundaries = compute_boundary(thresholded_ct_scan_array)
 
 ini = 37
-end = 42
-for i in range(ini, end):
-    temp = SimpleITK.GetImageFromArray(thresholded_ct_scan_array[:, :, i])
-    temp = SimpleITK.Cast(temp, img_original.GetPixelIDValue())
-    temp.CopyInformation(img_original[:, :, i])
-    m = multiply_filter.Execute(img_original[:, :, i], temp)
-    sitk_show(img_original[:, :, i])
-    sitk_show(m)
-    #
-    # np_show(boundaries['boundaries_array'][:, :, i])
+end = 37
+for i in range(0, img_original.GetDepth()):
+    if ini <= i <= end:
+        # temp = initial_binary_threshold(img_original[:, :, i])
+        temp = SimpleITK.GetImageFromArray(thresholded_ct_scan_array[:, :, i])
+        sitk_show(temp)
+
+        rem = morphology.remove_small_objects(thresholded_ct_scan_array[:, :, i], 5)
+        temp = SimpleITK.GetImageFromArray(rem)
+        sitk_show(temp)
+        sitk_show(img_original[:, :, i])
+        np_show(boundaries['boundaries_array'][:, :, i])
+        # sitk_show(SimpleITK.Tile(temp, img_original[:, :, i], (2, 1, 0)))
 
 plt.show()
 
