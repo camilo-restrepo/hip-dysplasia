@@ -3,7 +3,7 @@ import SimpleITK
 import matplotlib.pyplot as plt
 from skimage.filters import threshold_otsu
 from skimage.morphology import closing, disk, reconstruction, remove_small_objects
-from skimage.measure import label, regionprops
+from skimage.measure import marching_cubes
 import utils
 
 
@@ -76,22 +76,21 @@ def get_segmented_image(image):
 
 # mask_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 # thresholded_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
-#
+
 # for i in range(0, img_original.GetDepth()):
-#     mask_array[:, :, i] = get_bone_mask(img_original[:, :, i])
-#     utils.np_show(mask_array[:, :, i])
+    # mask_array[:, :, i] = get_bone_mask(img_original[:, :, i])
+    # utils.np_show(mask_array[:, :, i])
     # thresholded_array[:, :, i] = get_segmented_image(img_original[:, :, i])
     # utils.np_show(thresholded_array[:, :, i])
 
 
 ini = 37
-end = 37
+end = 42
 for i in range(0, img_original.GetDepth()):
     if ini <= i <= end:
         r = get_segmented_image(img_original[:, :, i])
-        label_img = label(r)
-        regions = regionprops(label_img)
         utils.np_show(r)
+        # utils.show_hist(r)
 
 plt.show()
 
