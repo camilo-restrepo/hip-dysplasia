@@ -3,11 +3,11 @@ import SimpleITK
 import matplotlib.pyplot as plt
 from skimage import morphology
 
-# PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
-# outPath = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/out/"
+PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+outPath = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/out/"
 
-PathDicom = "D:\imagenes\ALMANZA_RUIZ_JUAN_CARLOS\TAC_DE_PELVIS - 84441\_Bone_30_2"
-outPath = "D:\imagenes\out"
+# PathDicom = "D:\imagenes\ALMANZA_RUIZ_JUAN_CARLOS\TAC_DE_PELVIS - 84441\_Bone_30_2"
+# outPath = "D:\imagenes\out"
 
 # lstFilesDCM = []
 # for dirName, subdirList, fileList in os.walk(PathDicom):
@@ -180,7 +180,7 @@ medianFilter.SetRadius([2, 2, 2])
 # DISTRIBUCION DEL RUIDO OBTENIDA CON IMAGEJ: Mean: -1021.905 Std: 44.194
 
 
-def initial_binary_threshold(image):
+def get_threshold_mask(image):
     # Segmentacion del cuerpo
     img_smooth = smooth_filter.Execute(image)
     otsu_filter.SetNumberOfThresholds(2)
@@ -213,7 +213,7 @@ def initial_binary_threshold(image):
 
 
 def get_segmented_image(original):
-    mask = initial_binary_threshold(original)
+    mask = get_threshold_mask(original)
     # mask = SimpleITK.Cast(mask, original.GetPixelIDValue())
     mask.CopyInformation(original)
     m = multiply_filter.Execute(original, mask)
@@ -225,25 +225,24 @@ def get_segmented_image(original):
     return m
 
 thresholded_ct_scan_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
+remove_small_objects_size = 20
 
 for i in range(0, img_original.GetDepth()):
-    thresholded_ct_scan_array[:, :, i] = SimpleITK.GetArrayFromImage(initial_binary_threshold(img_original[:, :, i]))
+    thresholded_ct_scan_array[:, :, i] = SimpleITK.GetArrayFromImage(get_threshold_mask(img_original[:, :, i]))
+    tmp = morphology.remove_small_objects(thresholded_ct_scan_array[:, :, i].astype(bool), remove_small_objects_size)
+    thresholded_ct_scan_array[:, :, i] = tmp.astype(int)
 
 boundaries = compute_boundary(thresholded_ct_scan_array)
 
 ini = 37
-end = 37
+end = 42
 for i in range(0, img_original.GetDepth()):
     if ini <= i <= end:
         # temp = initial_binary_threshold(img_original[:, :, i])
         temp = SimpleITK.GetImageFromArray(thresholded_ct_scan_array[:, :, i])
         sitk_show(temp)
-
-        rem = morphology.remove_small_objects(thresholded_ct_scan_array[:, :, i], 5)
-        temp = SimpleITK.GetImageFromArray(rem)
-        sitk_show(temp)
-        sitk_show(img_original[:, :, i])
-        np_show(boundaries['boundaries_array'][:, :, i])
+        #sitk_show(img_original[:, :, i])
+        # np_show(boundaries['boundaries_array'][:, :, i])
         # sitk_show(SimpleITK.Tile(temp, img_original[:, :, i], (2, 1, 0)))
 
 plt.show()
