@@ -140,10 +140,14 @@ remove_small_objects_size = 20
 
 
 def get_bone_mask(image):
+    # Remove noise
+    img_smooth = smooth_filter.Execute(image)
+    img_smooth_array = SimpleITK.GetArrayFromImage(img_smooth)
+
     # Segmentacion del cuerpo
-    threshold = threshold_otsu(image)
-    binary = image > threshold
-    binary = np.multiply(binary, image)
+    threshold = threshold_otsu(img_smooth_array)
+    binary = img_smooth_array > threshold
+    binary = np.multiply(binary, img_smooth_array)
 
     # Segmentacion de los huesos
     threshold = threshold_otsu(binary)
@@ -162,13 +166,12 @@ def get_bone_mask(image):
 
 
 def get_segmented_image(image):
-    img_smooth = smooth_filter.Execute(image)
-    img_smooth_array = SimpleITK.GetArrayFromImage(img_smooth)
     img_array = SimpleITK.GetArrayFromImage(image)
-    mask = get_bone_mask(img_smooth_array)
+    mask = get_bone_mask(image)
     img_array = np.multiply(img_array, mask)
     img_array[img_array < 0] = 0
     return img_array
+
 
 # thresholded_ct_scan_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 #
