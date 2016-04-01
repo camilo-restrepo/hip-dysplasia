@@ -269,3 +269,14 @@ plt.show()
 # Scikit Image
 # for i in range(0, imgOriginal.GetDepth()):
 #     tifffile.imsave(outPath+'test-'+'{:03d}'.format(i)+'.tif', boundaries['boundaries_array'][:, :, i])
+
+
+# Blob Detection
+# blobs_doh = blob_doh(bone_mask, max_sigma=30, threshold=.02)
+# blobs = []
+# lstSeeds = []
+# for blob in blobs_doh:
+#     y, x, r = blob
+#     if r > 1 and bone_mask[y, x] != 0:
+#         blobs.append(blob)
+#         lstSeeds.append((x.astype(int), y.astype(int)))

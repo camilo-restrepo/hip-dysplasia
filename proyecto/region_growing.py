@@ -2,7 +2,8 @@ import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
 
-PathDicom = "D:\imagenes\ALMANZA_RUIZ_JUAN_CARLOS\TAC_DE_PELVIS - 84441\_Bone_30_2"
+#PathDicom = "D:\imagenes\ALMANZA_RUIZ_JUAN_CARLOS\TAC_DE_PELVIS - 84441\_Bone_30_2"
+PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 outPath = "D:\imagenes\out"
 
 
@@ -31,7 +32,7 @@ morphological_filter = SimpleITK.GrayscaleMorphologicalClosingImageFilter()
 
 
 ini = 37
-end = 37
+end = 42
 for i in range(0, img_original.GetDepth()):
     if ini <= i <= end:
         imagen = img_original[:, :, i]
