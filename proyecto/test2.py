@@ -3,7 +3,6 @@ import SimpleITK
 import matplotlib.pyplot as plt
 from skimage.filters import threshold_otsu
 from skimage.morphology import closing, disk, reconstruction, remove_small_objects
-from skimage.measure import marching_cubes
 import utils
 
 
@@ -63,6 +62,7 @@ def get_bone_mask(image):
 
     result = filled + bone
     result[result > 0] = 1
+
     return result
 
 
