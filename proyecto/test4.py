@@ -1,7 +1,6 @@
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
-from skimage.filters import threshold_otsu
 from skimage.morphology import closing, disk, reconstruction, remove_small_objects
 import utils
 
@@ -31,26 +30,6 @@ def get_bone_mask(image):
     img_smooth = smooth_filter.Execute(image)
     img_smooth_array = SimpleITK.GetArrayFromImage(img_smooth)
 
-    # Segmentacion del cuerpo
-    threshold = threshold_otsu(img_smooth_array)
-    binary = img_smooth_array > threshold
-    binary = np.multiply(binary, img_smooth_array)
-
-    # Segmentacion de los huesos
-    threshold = threshold_otsu(binary)
-    binary = binary > threshold
-
-    # Rellenar huecos
-    binary = closing(binary, closing_radius)
-    binary = remove_small_objects(binary, remove_small_objects_size)
-
-    # Llenar huecos
-    seed = np.copy(binary)
-    seed[1:-1, 1:-1] = binary.max()
-    mask = binary
-    filled = reconstruction(seed, mask, method='erosion')
-
-    # Otra segmentacion mas sencilla que complementa la anterior
     bone = np.zeros_like(img_smooth_array)
     bone[img_smooth_array < 150] = 0
     bone[img_smooth_array > 150] = 1
@@ -60,11 +39,8 @@ def get_bone_mask(image):
     seed[1:-1, 1:-1] = bone.max()
     mask = bone
     bone = reconstruction(seed, mask, method='erosion')
-    utils.np_show(bone)
-    result = filled + bone
-    result[result > 0] = 1
 
-    return result
+    return bone
 
 
 def get_segmented_image(image):
@@ -90,7 +66,7 @@ end = 42
 for i in range(0, img_original.GetDepth()):
     if ini <= i <= end:
         r = get_segmented_image(img_original[:, :, i])
-        # utils.np_show(r)
+        utils.np_show(r)
         # utils.show_hist(r)
 
 plt.show()
