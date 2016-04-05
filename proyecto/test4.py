@@ -4,6 +4,11 @@ import matplotlib.pyplot as plt
 from skimage.morphology import closing, disk, reconstruction, remove_small_objects
 import utils
 
+from skimage.measure import label
+from skimage.color import label2rgb
+from skimage.measure import regionprops
+import matplotlib.patches as mpatches
+
 
 # PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
@@ -33,12 +38,33 @@ def get_bone_mask(image):
     bone = np.zeros_like(img_smooth_array)
     bone[img_smooth_array < 150] = 0
     bone[img_smooth_array > 150] = 1
-    bone = closing(bone, closing_radius)
     bone = remove_small_objects(bone.astype(bool), remove_small_objects_size)
+
+    label_image = label(bone)
+    mid = label_image[:, 256]
+    labels = set(mid[mid != 0])
+
+    for i in range(0, label_image.shape[0]):
+        for j in range(0, label_image.shape[1]):
+            if label_image[i, j] in labels:
+                bone[i, j] = 0
+                label_image[i, j] = 0
+
+    bone = closing(bone, closing_radius)
     seed = np.copy(bone)
     seed[1:-1, 1:-1] = bone.max()
     mask = bone
     bone = reconstruction(seed, mask, method='erosion')
+
+
+    # image_label_overlay = label2rgb(label_image, image=bone)
+    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
+    # ax.imshow(image_label_overlay)
+    #
+    # for region in regionprops(label_image):
+    #     minr, minc, maxr, maxc = region.bbox
+    #     rect = mpatches.Rectangle((minc, minr), maxc - minc, maxr - minr, fill=False, edgecolor='red', linewidth=2)
+    #     ax.add_patch(rect)
 
     return bone
 
@@ -60,14 +86,13 @@ def get_segmented_image(image):
     # thresholded_array[:, :, i] = get_segmented_image(img_original[:, :, i])
     # utils.np_show(thresholded_array[:, :, i])
 
-
 ini = 37
 end = 42
-for i in range(0, img_original.GetDepth()):
-    if ini <= i <= end:
-        r = get_segmented_image(img_original[:, :, i])
+for z in range(0, img_original.GetDepth()):
+    if ini <= z <= end:
+        r = get_segmented_image(img_original[:, :, z])
+        # r = get_bone_mask(img_original[:, :, z])
         utils.np_show(r)
-        # utils.show_hist(r)
 
 plt.show()
 
