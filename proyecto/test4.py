@@ -56,16 +56,6 @@ def get_bone_mask(image):
     mask = bone
     bone = reconstruction(seed, mask, method='erosion')
 
-
-    # image_label_overlay = label2rgb(label_image, image=bone)
-    # fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
-    # ax.imshow(image_label_overlay)
-    #
-    # for region in regionprops(label_image):
-    #     minr, minc, maxr, maxc = region.bbox
-    #     rect = mpatches.Rectangle((minc, minr), maxc - minc, maxr - minr, fill=False, edgecolor='red', linewidth=2)
-    #     ax.add_patch(rect)
-
     return bone
 
 
@@ -76,23 +66,30 @@ def get_segmented_image(image):
     img_array[img_array < 0] = 0
     return img_array
 
-
-# mask_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 # thresholded_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 
-# for i in range(0, img_original.GetDepth()):
-    # mask_array[:, :, i] = get_bone_mask(img_original[:, :, i])
-    # utils.np_show(mask_array[:, :, i])
-    # thresholded_array[:, :, i] = get_segmented_image(img_original[:, :, i])
-    # utils.np_show(thresholded_array[:, :, i])
-
-ini = 37
-end = 42
+ini = 65
+end = 70
+mask_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 for z in range(0, img_original.GetDepth()):
     if ini <= z <= end:
-        r = get_segmented_image(img_original[:, :, z])
-        # r = get_bone_mask(img_original[:, :, z])
-        utils.np_show(r)
+        mask_array[:, :, z] = get_bone_mask(img_original[:, :, z])
+        # utils.np_show(r)
+
+# ------------------------ AQUI CONTINUA ------------------------
+
+label_image = label(mask_array)
+
+for z in range(0, img_original.GetDepth()):
+    if ini <= z <= end:
+        image_label_overlay = label2rgb(label_image[:, :, z], image=mask_array[:, :, z])
+        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
+        ax.imshow(image_label_overlay)
+
+        for region in regionprops(label_image[:, :, z]):
+            minr, minc, maxr, maxc = region.bbox
+            rect = mpatches.Rectangle((minc, minr), maxc - minc, maxr - minr, fill=False, edgecolor='red', linewidth=2)
+            ax.add_patch(rect)
 
 plt.show()
 
