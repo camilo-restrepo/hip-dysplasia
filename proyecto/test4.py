@@ -78,18 +78,17 @@ for z in range(0, img_original.GetDepth()):
 
 # ------------------------ AQUI CONTINUA ------------------------
 
-label_image = label(mask_array)
-
-for z in range(0, img_original.GetDepth()):
-    if ini <= z <= end:
-        image_label_overlay = label2rgb(label_image[:, :, z], image=mask_array[:, :, z])
-        fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
-        ax.imshow(image_label_overlay)
-
-        for region in regionprops(label_image[:, :, z]):
-            minr, minc, maxr, maxc = region.bbox
-            rect = mpatches.Rectangle((minc, minr), maxc - minc, maxr - minr, fill=False, edgecolor='red', linewidth=2)
-            ax.add_patch(rect)
+# label_image = label(mask_array)
+# for z in range(0, img_original.GetDepth()):
+#     if ini <= z <= end:
+#         image_label_overlay = label2rgb(label_image[:, :, z], image=mask_array[:, :, z])
+#         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
+#         ax.imshow(image_label_overlay)
+#
+#         for region in regionprops(label_image[:, :, z]):
+#             minr, minc, maxr, maxc = region.bbox
+#             rect = mpatches.Rectangle((minc, minr), maxc - minc, maxr - minr, fill=False, edgecolor='red', linewidth=2)
+#             ax.add_patch(rect)
 
 plt.show()
 
