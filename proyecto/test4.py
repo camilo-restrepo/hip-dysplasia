@@ -5,11 +5,12 @@ from skimage.morphology import closing, disk, reconstruction, remove_small_objec
 from skimage import feature
 from skimage.filters import sobel
 from scipy import ndimage as ndi
+from skimage.filters import threshold_otsu, rank
 import utils
 
 from skimage.measure import label
 from skimage.color import label2rgb
-from skimage.measure import regionprops
+from skimage.measure import regionprops, find_contours
 import matplotlib.patches as mpatches
 
 
@@ -37,10 +38,17 @@ def get_bone_mask(image):
     img_smooth = smooth_filter.Execute(image)
     img_smooth_array = SimpleITK.GetArrayFromImage(img_smooth)
 
-    bone = np.zeros_like(img_smooth_array)
-    bone[img_smooth_array < 150] = 0
-    bone[img_smooth_array > 150] = 1
+    # Segmentacion del cuerpo
+    body_threshold = threshold_otsu(img_smooth_array)
+    body = img_smooth_array > body_threshold
+    body = np.multiply(body, img_smooth_array)
+
+    # Segmentacion de los huesos
+    bone_threshold = threshold_otsu(body)
+    bone = body > bone_threshold
+
     bone = remove_small_objects(bone.astype(bool), remove_small_objects_size)
+    bone = ndi.binary_fill_holes(bone.astype(bool))
 
     label_image = label(bone)
     mid = label_image[:, 256]
@@ -52,32 +60,20 @@ def get_bone_mask(image):
                 bone[i, j] = 0
                 label_image[i, j] = 0
 
-    img_array = np.multiply(bone, img_smooth_array)
-    elevation_map = sobel(img_array)
+    # img_array = np.multiply(bone, img_smooth_array)
+    # utils.np_show(img_array)
+    # utils.show_hist(img_array)
 
-    edges = feature.canny(img_array, sigma=2.0).astype(int)
-    edges[edges > 0] = 1000
-    r = edges + elevation_map
-    # r[r < 1000] = 0
-    # r[r >= 1000] = 1
-    utils.np_show(r)
+    # edges = feature.canny(img_array, sigma=2.0).astype(int)
+    #edges[edges > 0] = 1000
+    # r = edges + img_array
 
-
-    # seed = np.copy(img_array)
-    # seed[1:-1, 1:-1] = img_array.max()
-    # mask = img_array
-    # bone = reconstruction(seed, mask, method='erosion')
-
-    # edges = binary_closing(edges, disk(1))
-    # edges = ndi.binary_fill_holes(edges)
-    # utils.np_show(elevation_map)
-
-    # utils.np_show(bone)
+    # bone = closing(bone, closing_radius)
     # seed = np.copy(bone)
     # seed[1:-1, 1:-1] = bone.max()
     # mask = bone
     # bone = reconstruction(seed, mask, method='erosion')
-
+    # utils.np_show(bone)
     return bone
 
 
@@ -93,11 +89,68 @@ ini = 42
 end = 49
 mask_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 for z in range(0, img_original.GetDepth()):
-    if ini <= z <= end:
+    # if ini <= z <= end:
         mask_array[:, :, z] = get_bone_mask(img_original[:, :, z])
 
 
 # ------------------------ AQUI CONTINUA ------------------------
+
+def pixel_belongs_to_boundary(img_before, img, img_after, x, y):
+    pixel = img[x, y]
+    if pixel != 0:
+        neighbors = [
+            # img_array[x - 1][y - 1][z],
+            img[x - 1][y],
+            #img_array[x - 1][y + 1][z],
+            img[x][y - 1],
+            img[x][y + 1],
+            #img_array[x + 1][y - 1][z],
+            img[x + 1][y],
+            #img_array[x + 1][y + 1][z],
+            img_before[x][y],
+            img_after[x][y]
+        ]
+
+        for n in neighbors:
+            if n == 0:
+                return True
+    return False
+
+
+def compute_boundary(img_before, img, img_after):
+    width = img.shape[0]
+    height = img.shape[1]
+    boundaries_array = np.zeros_like(img)
+    e_b_list = []
+
+    for index, x in np.ndenumerate(img):
+        if x != 0 and 0 < index[0] < width-1 and 0 < index[1] < height-1:
+            if pixel_belongs_to_boundary(img_before, img, img_after, index[0], index[1]):
+                boundaries_array[index[0], index[1]] = x
+                e_b_list.append(index)
+
+    return {'boundaries_array': boundaries_array, 'e_b': e_b_list}
+
+
+for z in range(0, img_original.GetDepth()):
+    if ini <= z <= end:
+        before = mask_array[:, :, z-1]
+        image = mask_array[:, :, z-1]
+        after = mask_array[:, :, z+1]
+        r = compute_boundary(before, image, after)
+        l1 = r['e_b'][0]
+        im = SimpleITK.GetArrayFromImage(img_original[:, :, z])
+        a = l1[0] - 5
+        b = l1[0] + 6
+        c = l1[1] - 5
+        d = l1[1] + 6
+        e = im[a:b, c:d]
+        utils.np_show(e)
+        print e.shape
+
+
+        #utils.np_show(r['boundaries_array'])
+
 
 # label_img = label(mask_array)
 # for z in range(0, img_original.GetDepth()):
