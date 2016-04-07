@@ -1,7 +1,10 @@
 import numpy as np
 import SimpleITK
 import matplotlib.pyplot as plt
-from skimage.morphology import closing, disk, reconstruction, remove_small_objects
+from skimage.morphology import closing, disk, reconstruction, remove_small_objects, binary_closing, square, opening, watershed
+from skimage import feature
+from skimage.filters import sobel
+from scipy import ndimage as ndi
 import utils
 
 from skimage.measure import label
@@ -31,7 +34,6 @@ remove_small_objects_size = 80
 
 
 def get_bone_mask(image):
-    # Remove noise
     img_smooth = smooth_filter.Execute(image)
     img_smooth_array = SimpleITK.GetArrayFromImage(img_smooth)
 
@@ -50,11 +52,31 @@ def get_bone_mask(image):
                 bone[i, j] = 0
                 label_image[i, j] = 0
 
-    bone = closing(bone, closing_radius)
-    seed = np.copy(bone)
-    seed[1:-1, 1:-1] = bone.max()
-    mask = bone
-    bone = reconstruction(seed, mask, method='erosion')
+    img_array = np.multiply(bone, img_smooth_array)
+    elevation_map = sobel(img_array)
+
+    edges = feature.canny(img_array, sigma=2.0).astype(int)
+    edges[edges > 0] = 1000
+    r = edges + elevation_map
+    # r[r < 1000] = 0
+    # r[r >= 1000] = 1
+    utils.np_show(r)
+
+
+    # seed = np.copy(img_array)
+    # seed[1:-1, 1:-1] = img_array.max()
+    # mask = img_array
+    # bone = reconstruction(seed, mask, method='erosion')
+
+    # edges = binary_closing(edges, disk(1))
+    # edges = ndi.binary_fill_holes(edges)
+    # utils.np_show(elevation_map)
+
+    # utils.np_show(bone)
+    # seed = np.copy(bone)
+    # seed[1:-1, 1:-1] = bone.max()
+    # mask = bone
+    # bone = reconstruction(seed, mask, method='erosion')
 
     return bone
 
@@ -63,29 +85,29 @@ def get_segmented_image(image):
     img_array = SimpleITK.GetArrayFromImage(image)
     mask = get_bone_mask(image)
     img_array = np.multiply(img_array, mask)
-    img_array[img_array < 0] = 0
+    # img_array[img_array < 0] = 0
     return img_array
 
-# thresholded_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 
-ini = 65
-end = 70
+ini = 42
+end = 49
 mask_array = np.zeros((img_original.GetWidth(), img_original.GetHeight(), img_original.GetDepth()))
 for z in range(0, img_original.GetDepth()):
     if ini <= z <= end:
         mask_array[:, :, z] = get_bone_mask(img_original[:, :, z])
-        # utils.np_show(r)
+
 
 # ------------------------ AQUI CONTINUA ------------------------
 
-# label_image = label(mask_array)
+# label_img = label(mask_array)
 # for z in range(0, img_original.GetDepth()):
 #     if ini <= z <= end:
-#         image_label_overlay = label2rgb(label_image[:, :, z], image=mask_array[:, :, z])
+#         label_img = label(mask_array[:, :, z])
+#         image_label_overlay = label2rgb(label_img, image=mask_array[:, :, z])
 #         fig, ax = plt.subplots(ncols=1, nrows=1, figsize=(6, 6))
 #         ax.imshow(image_label_overlay)
 #
-#         for region in regionprops(label_image[:, :, z]):
+#         for region in regionprops(label_img):
 #             minr, minc, maxr, maxc = region.bbox
 #             rect = mpatches.Rectangle((minc, minr), maxc - minc, maxr - minr, fill=False, edgecolor='red', linewidth=2)
 #             ax.add_patch(rect)
