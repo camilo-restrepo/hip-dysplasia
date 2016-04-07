@@ -38,4 +38,4 @@ def get_stats(img):
 
 def show_hist(img):
     plt.figure()
-    plt.hist(img.ravel(), bins=256, range=(1, np.max(img)), fc='k', ec='k')
+    plt.hist(img.ravel(), bins=256, range=(np.min(img), np.max(img)), fc='k', ec='k')

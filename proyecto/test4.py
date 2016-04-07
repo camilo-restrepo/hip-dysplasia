@@ -146,7 +146,8 @@ for z in range(0, img_original.GetDepth()):
         d = l1[1] + 6
         e = im[a:b, c:d]
         utils.np_show(e)
-        print e.shape
+        utils.show_hist(e)
+
 
 
         #utils.np_show(r['boundaries_array'])
