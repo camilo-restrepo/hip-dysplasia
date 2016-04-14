@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import utils
 import numpy as np
 from skimage.filters import threshold_otsu
-from skimage.morphology import remove_small_objects, convex_hull_object
+from skimage.morphology import remove_small_objects
 from skimage.measure import label, regionprops
 from skimage.segmentation import active_contour
 from scipy import ndimage as ndi
@@ -19,11 +19,10 @@ def remove_noise(sitk_image):
     return SimpleITK.GetArrayFromImage(img_smooth)
 
 
-def get_sides_center_coordinates(sitk_image):
-    img_smooth = remove_noise(sitk_image)
-    bone = np.zeros_like(img_smooth)
-    bone[img_smooth < 200] = 0
-    bone[img_smooth > 200] = 1
+def get_sides_center_coordinates(image, remove_small_objects_size=80):
+    bone = np.zeros_like(image)
+    bone[image < 200] = 0
+    bone[image > 200] = 1
     bone = remove_small_objects(bone.astype(bool), remove_small_objects_size)
     label_image = label(bone)
 
@@ -33,31 +32,55 @@ def get_sides_center_coordinates(sitk_image):
     return centroids
 
 
-def get_bone_mask(image_array):
+def get_rows(row):
+    row_ini = 0
+    if row - 128 > 0:
+        row_ini = row - 128
+    row_end = row_ini + 256
+    return {'row_ini': row_ini, 'row_end': row_end}
+
+
+def get_legs(image_array):
+    centroids = get_sides_center_coordinates(image_array[0, :, :])
+    row1 = centroids[0][0].astype(int)
+    rows = get_rows(row1)
+    right_leg = image_array[:, rows['row_ini']:rows['row_end'], 0:256]
+
+    row2 = centroids[1][0].astype(int)
+    rows = get_rows(row2)
+    left_leg = image_array[:, rows['row_ini']:rows['row_end'], 256:]
+
+    return {'right_leg': right_leg, 'left_leg': left_leg}
+
+
+def get_body_mask(image_array):
     body_threshold = threshold_otsu(image_array)
-    body = image_array > body_threshold
-    bone = np.multiply(body, image_array)
+    body_mask = image_array > body_threshold
+    return body_mask
 
-    # bone_threshold = threshold_otsu(body)
-    # bone = body > bone_threshold
 
-    # bone = np.copy(bone)
-    # for k in range(0, bone.shape[0]):
-    #     b = bone[k, :, :]
-    #     b = ndi.binary_fill_holes(b.astype(bool))
-    #     bone[k, :, :] = remove_small_objects(b.astype(bool), 200)
+def get_body(image_array):
+    body_mask = get_body_mask(image_array)
+    body = np.multiply(body_mask, image_array)
+    body[body < 0] = 0
+    return body
 
-    #
-    # label_image = label(bone)
-    # mid = label_image[:, 256]
-    # labels = set(mid[mid != 0])
-    #
-    # for i in range(0, label_image.shape[0]):
-    #     for j in range(0, label_image.shape[1]):
-    #         if label_image[i, j] in labels:
-    #             bone[i, j] = 0
-    #             label_image[i, j] = 0
 
+def get_bone_mask(image_array):
+    bone_mask = np.zeros_like(image_array)
+    for z in range(0, image_array.shape[0]):
+        bone_threshold = threshold_otsu(image_array[z, :, :])
+        bone_mask[z, :, :] = image_array[z, :, :] > bone_threshold
+        bone_mask[z, :, :] = remove_small_objects(bone_mask[z, :, :].astype(bool), 200)
+        # bone_mask[z, :, :] = ndi.binary_fill_holes(bone_mask[z, :, :].astype(bool))
+
+    return bone_mask
+
+
+def get_bone(image_array):
+    bone_mask = get_bone_mask(image_array)
+    bone = np.multiply(bone_mask, image_array)
+    bone[bone < 0] = 0
     return bone
 
 
@@ -69,46 +92,27 @@ reader = SimpleITK.ImageSeriesReader()
 filenames_dicom = reader.GetGDCMSeriesFileNames(PathDicom)
 reader.SetFileNames(filenames_dicom)
 img_original = reader.Execute()
+
 img_original_array = SimpleITK.GetArrayFromImage(img_original)
+img_smooth_array = remove_noise(img_original)
 
-remove_small_objects_size = 80
-# obtener izq y der separados y mas pequenos
-centroids = get_sides_center_coordinates(img_original[:, :, 0])
 
-row1 = centroids[0][0].astype(int)
-row2 = centroids[1][0].astype(int)
-row_ini = 0
-if row1 - 128 > 0:
-    row_ini = row1 - 128
-row_end = row_ini + 256
-right_leg = img_original_array[:, row_ini:row_end, 0:256]
-
-row_ini = 0
-if row1 - 128 > 0:
-    row_ini = row2 - 128
-row_end = row_ini + 256
-left_leg = img_original_array[:, row_ini:row_end, 256:]
-
-# ESTO TIENE QUE SER ASI PARA PRUEBAS SOLO DER: legs = [right_leg, left_leg]
-legs = [right_leg]
+legs = get_legs(img_smooth_array)
+# legs_orginal = get_legs(img_original_array)
 
 ini = 42
 end = 49
-for leg in legs:
-    leg_smooth_array = remove_noise(SimpleITK.GetImageFromArray(leg))
-    mask = get_bone_mask(leg_smooth_array)
+for leg_key in legs.keys():
+    if leg_key == 'right_leg':
+        body_m = get_body(legs['right_leg'])
+        for z in range(0, img_original.GetDepth()):
+            if ini <= z <= end:
+                utils.np_show(body_m[z, :, :])
 
-    for z in range(0, img_original.GetDepth()):
-        if ini <= z <= end:
-            # r = np.multiply(mask[z, :, :], leg_smooth_array[z, :, :])
-            r = mask[z, :, :]
-            r[r < 0] = 0
-            c = centroids[0]
-            init = np.array([c[0], c[1]]).T
-            utils.np_show(r)
-            snake = active_contour(r, init, alpha=0.015, beta=10, gamma=0.001)
-            utils.np_show(snake)
-
+                bone_threshold = threshold_otsu(body_m[z, :, :])
+                bone_mask = body_m[z, :, :] > bone_threshold
+                bone_mask = remove_small_objects(bone_mask.astype(bool), 200)
+                utils.np_show(bone_mask)
 
 plt.show()
 

@@ -26,8 +26,8 @@ def histogram_without_background(img):
 
 
 def get_stats_without_background(img):
-    img_array = SimpleITK.GetArrayFromImage(img)
-    img_array = img_array[img_array > 0]
+    # img_array = SimpleITK.GetArrayFromImage(img)
+    img_array = img[img > 0]
     return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
 
 
@@ -38,4 +38,4 @@ def get_stats(img):
 
 def show_hist(img):
     plt.figure()
-    plt.hist(img.ravel(), bins=256, range=(np.min(img), np.max(img)), fc='k', ec='k')
+    plt.hist(img.ravel(), bins=256, range=(1, np.max(img)), fc='k', ec='k')
