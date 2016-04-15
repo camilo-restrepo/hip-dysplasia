@@ -3,12 +3,12 @@ import matplotlib.pyplot as plt
 import utils
 import numpy as np
 from skimage.filters import threshold_otsu
-from skimage.morphology import remove_small_objects
+from skimage.morphology import remove_small_objects, convex_hull_object
 from skimage.measure import label, regionprops
-from skimage.segmentation import active_contour
+from skimage.segmentation import clear_border
 from scipy import ndimage as ndi
-from skimage.color import label2rgb
-import matplotlib.patches as mpatches
+import math
+from lib import morphsnakes
 
 
 def remove_noise(sitk_image):
@@ -69,10 +69,12 @@ def get_body(image_array):
 def get_bone_mask(image_array):
     bone_mask = np.zeros_like(image_array)
     for z in range(0, image_array.shape[0]):
-        bone_threshold = threshold_otsu(image_array[z, :, :])
-        bone_mask[z, :, :] = image_array[z, :, :] > bone_threshold
+        stats = utils.get_stats_without_background(image_array[z, :, :])
+        bone_mask[z, :, :] = image_array[z, :, :] > stats['mean']
+        bone_mask[z, :, :] = ndi.binary_fill_holes(bone_mask[z, :, :].astype(bool))
         bone_mask[z, :, :] = remove_small_objects(bone_mask[z, :, :].astype(bool), 200)
-        # bone_mask[z, :, :] = ndi.binary_fill_holes(bone_mask[z, :, :].astype(bool))
+        bone_mask[z, :, :] = clear_border(bone_mask[z, :, :])
+        bone_mask[z, :, :] = convex_hull_object(bone_mask[z, :, :])
 
     return bone_mask
 
@@ -80,12 +82,12 @@ def get_bone_mask(image_array):
 def get_bone(image_array):
     bone_mask = get_bone_mask(image_array)
     bone = np.multiply(bone_mask, image_array)
-    bone[bone < 0] = 0
+    # bone[bone < 0] = 0
     return bone
 
 
-# PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
-PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+# PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 
 
 reader = SimpleITK.ImageSeriesReader()
@@ -100,37 +102,40 @@ img_smooth_array = remove_noise(img_original)
 legs = get_legs(img_smooth_array)
 # legs_orginal = get_legs(img_original_array)
 
+
+def circle_levelset(shape, center, sqradius, scalerow=1.0):
+    """Build a binary function with a circle as the 0.5-levelset."""
+    grid = np.mgrid[list(map(slice, shape))].T - center
+    phi = sqradius - np.sqrt(np.sum((grid.T)**2, 0))
+    u = np.float_(phi > 0)
+    return u
+
+
 ini = 42
 end = 49
 for leg_key in legs.keys():
     if leg_key == 'right_leg':
-        body_m = get_body(legs['right_leg'])
+        body_m = get_body(legs[leg_key])
+        bone_m = get_bone_mask(body_m)
+        bone_m1 = get_bone(body_m)
+        lb_img = label(bone_m)
+
         for z in range(0, img_original.GetDepth()):
             if ini <= z <= end:
-                utils.np_show(body_m[z, :, :])
+                # utils.np_show(body_m[z, :, :])
+                # utils.np_show(bone_m[z, :, :])
+                region = regionprops(lb_img[z, :, :])[0]
+                minr, minc, maxr, maxc = region.bbox
+                dist = math.hypot(maxr - minr, maxc - minc)
 
-                bone_threshold = threshold_otsu(body_m[z, :, :])
-                bone_mask = body_m[z, :, :] > bone_threshold
-                bone_mask = remove_small_objects(bone_mask.astype(bool), 200)
-                utils.np_show(bone_mask)
+                macwe = morphsnakes.MorphACWE(bone_m1[z, :, :], smoothing=0, lambda1=1, lambda2=2)
+                macwe.levelset = circle_levelset(bone_m1[z, :, :].shape, (region.centroid[0], region.centroid[1]),
+                                                 dist/2)
+                e = morphsnakes.evolve_visual(macwe, num_iters=190)
+                utils.np_show(e)
+
 
 plt.show()
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
