@@ -8,7 +8,7 @@ from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border
 from scipy import ndimage as ndi
 import math
-from lib import morphsnakes
+from extras import morphsnakes
 
 
 def remove_noise(sitk_image):
