@@ -3,12 +3,22 @@ import SimpleITK
 import matplotlib.pyplot as plt
 
 
+def remove_noise(sitk_image):
+    smooth_filter = SimpleITK.CurvatureFlowImageFilter()
+    smooth_filter.SetTimeStep(0.125)
+    smooth_filter.SetNumberOfIterations(5)
+    img_smooth = smooth_filter.Execute(sitk_image)
+    return SimpleITK.GetArrayFromImage(img_smooth)
+
+
 def load_dicom(path):
     reader = SimpleITK.ImageSeriesReader()
     filenames_dicom = reader.GetGDCMSeriesFileNames(path)
     reader.SetFileNames(filenames_dicom)
     img_original = reader.Execute()
-    return img_original
+    img_smooth_array = remove_noise(img_original)
+    img_original_array = SimpleITK.GetArrayFromImage(img_original)
+    return img_original_array, img_smooth_array
 
 
 def sitk_show(img):
