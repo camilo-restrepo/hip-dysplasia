@@ -146,11 +146,11 @@ img_smooth_array = remove_noise(img_original)
 legs = get_legs(img_smooth_array)
 
 
-ini = 42
-end = 49
+# ini = 42
+# end = 49
 
-# ini = 50
-# end = img_original.GetDepth()
+ini = 50
+end = img_original.GetDepth()
 
 for leg_key in legs.keys():
     if leg_key == 'right_leg':
@@ -158,8 +158,8 @@ for leg_key in legs.keys():
         # result = get_valley_emphasized_image(leg)
         # v = result['v']
         # e = result['e']
-        # seg = segmentation(leg)
-        seg = iterative_adaptative_reclassification(leg)
+        seg = initial_segmentation(leg)
+        # seg = iterative_adaptative_reclassification(leg)
         i = 0
         for z in range(0, img_original.GetDepth()):
             if ini <= z <= end:
