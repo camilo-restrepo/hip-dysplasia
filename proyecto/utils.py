@@ -3,6 +3,14 @@ import SimpleITK
 import matplotlib.pyplot as plt
 
 
+def load_dicom(path):
+    reader = SimpleITK.ImageSeriesReader()
+    filenames_dicom = reader.GetGDCMSeriesFileNames(path)
+    reader.SetFileNames(filenames_dicom)
+    img_original = reader.Execute()
+    return img_original
+
+
 def sitk_show(img):
     img_array = SimpleITK.GetArrayFromImage(img)
     plt.figure()
@@ -38,4 +46,4 @@ def get_stats(img):
 
 def show_hist(img):
     plt.figure()
-    plt.hist(img.ravel(), bins=256, range=(1, np.max(img)), fc='k', ec='k')
+    plt.hist(img.ravel(), bins=256, range=(np.min(img), np.max(img)), fc='k', ec='k')
