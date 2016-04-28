@@ -22,7 +22,7 @@ def calc_distance(voxel, centroid, centroids):
     return u*euclidean(voxel, centroid)
 
 
-def nearest_centroid(centroids, voxel):
+def compute_membership(centroids, voxel):
     min_distance = 100000
     cluster = 0
     for idx, val in enumerate(centroids):
@@ -61,7 +61,7 @@ def fuzzy_cmeans(boundary_points, image, ncentroids=2):
     while abs(error) > 0.001:
         # Calc cluster de cada pixel
         for idx, val in enumerate(data):
-            clusters[idx] = nearest_centroid(centroids, val)
+            clusters[idx] = compute_membership(centroids, val)
 
         # Recalc centroides
         for idx, val in enumerate(centroids):
