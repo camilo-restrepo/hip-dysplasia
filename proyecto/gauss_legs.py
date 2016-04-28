@@ -89,7 +89,7 @@ t1 = time.time()
 # result = np.zeros_like(legs['right_leg'])
 # np.multiply(emphasized_imgs['right_leg'], bone_masks['right_leg'], result)
 
-clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
+centroids = clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
 
 # ini = 20
 # end = 50

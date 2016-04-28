@@ -1,6 +1,5 @@
 import numpy as np
 from scipy.spatial.distance import euclidean
-import pickle
 
 
 def generate_centroids(ncentroids, mean, std):
@@ -10,15 +9,24 @@ def generate_centroids(ncentroids, mean, std):
     return centroids
 
 
-def calc_distance(voxel, centroid):
-    return euclidean(voxel, centroid)
+def belonging_to_class(voxel, centroid, centroids, p=2):
+    sum = 0
+    for c in centroids:
+        sum += (abs(voxel - centroid)/abs(voxel - c))**(2/(p - 1))
+    result = 1 / sum
+    return result
+
+
+def calc_distance(voxel, centroid, centroids):
+    u = belonging_to_class(voxel, centroid, centroids)
+    return u*euclidean(voxel, centroid)
 
 
 def nearest_centroid(centroids, voxel):
     min_distance = 100000
     cluster = 0
     for idx, val in enumerate(centroids):
-        distance = calc_distance(voxel, val)
+        distance = calc_distance(voxel, val, centroids)
         if distance < min_distance:
             min_distance = distance
             cluster = idx
@@ -68,5 +76,5 @@ def fuzzy_cmeans(boundary_points, image, ncentroids=2):
                 centroids[idx] = (sum/len(pxs))
 
         error = np.sum(centroids_old-centroids)
-
+    return centroids
 
