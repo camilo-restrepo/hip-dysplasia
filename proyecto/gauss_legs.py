@@ -69,7 +69,6 @@ img_original_array, img_smooth_array = utils.load_dicom(PathDicom)
 legs = get_legs(img_smooth_array)
 emphasized_imgs = {}
 bone_masks = {}
-boundaries_array = {}
 boundaries = {}
 
 for leg_key in legs.keys():
@@ -79,17 +78,22 @@ for leg_key in legs.keys():
         emphasized_imgs[leg_key] = emphasized_img
         bone_mask = segmentation.initial_segmentation(emphasized_img)
         bone_masks[leg_key] = bone_mask
-        boundary_array, e_b = bone_boundary.compute_boundary(bone_mask)
-        boundaries_array[leg_key] = boundary_array
+        e_b = bone_boundary.compute_boundary(bone_mask)
         boundaries[leg_key] = e_b
 t1 = time.time()
 # print t1-t0 ----- 33.3400089741
+
+# result = np.zeros_like(emphasized_imgs['right_leg'])
+# for p in boundaries['right_leg']:
+#     result[p[0], p[1], p[2]] = 1
 
 # result = boundaries['right_leg']
 # result = np.zeros_like(legs['right_leg'])
 # np.multiply(emphasized_imgs['right_leg'], bone_masks['right_leg'], result)
 
-centroids = clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
+# centroids = clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
+
+# clustering.modified_fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
 
 # ini = 20
 # end = 50
@@ -97,10 +101,10 @@ centroids = clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['ri
 # for k in range(ini, end):
 #     im = result[k, :, :]
 #     utils.np_show(im)
-#     im[im < 0] = 0
-#     utils.show_hist(im)
+    # im[im < 0] = 0
+    # utils.show_hist(im)
 #     i += 1
-#     if i == 10:
+#     if i == 20:
 #         plt.show()
 #         i = 0
 #
