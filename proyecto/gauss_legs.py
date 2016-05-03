@@ -2,12 +2,14 @@ import utils
 import valley
 import segmentation
 import bone_boundary
-import clustering
+# import clustering
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 from skimage.morphology import remove_small_objects
 import time
+
+import pickle
 
 
 def get_sides_center_coordinates(image, remove_small_objects_size=80):
@@ -59,9 +61,9 @@ def iterative_adaptative_reclassification(image):
     return result['boundaries_array']
 
 
-# PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 # PathDicom = "/Volumes/Files/imagenes/AVILA_MALAGON_ZULMA_IVONNE/TAC_DE_PELVIS_SIMPLE - 89589/_Bone_30_2/"
-PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+# PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 # PathDicom = "/home/camilo/Documents/imagenes/AVILA_MALAGON_ZULMA_IVONNE/TAC_DE_PELVIS_SIMPLE - 89589/_Bone_30_2/"
 
 t0 = time.time()
@@ -81,15 +83,20 @@ for leg_key in legs.keys():
         e_b = bone_boundary.compute_boundary(bone_mask)
         boundaries[leg_key] = e_b
 t1 = time.time()
-# print t1-t0 ----- 33.3400089741
+# print t1-t0  # ----- 26.53049016
 
-# result = np.zeros_like(emphasized_imgs['right_leg'])
+result = np.zeros_like(emphasized_imgs['right_leg'])
 # for p in boundaries['right_leg']:
 #     result[p[0], p[1], p[2]] = 1
 
 # result = boundaries['right_leg']
 # result = np.zeros_like(legs['right_leg'])
 # np.multiply(emphasized_imgs['right_leg'], bone_masks['right_leg'], result)
+
+# file = open('emphasized_imgs.txt', 'w')
+# pickle.dump(result, file)
+# file.close()
+
 
 # centroids = clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
 
@@ -101,8 +108,8 @@ t1 = time.time()
 # for k in range(ini, end):
 #     im = result[k, :, :]
 #     utils.np_show(im)
-    # im[im < 0] = 0
-    # utils.show_hist(im)
+#     # im[im < 0] = 0
+#     # utils.show_hist(im)
 #     i += 1
 #     if i == 20:
 #         plt.show()
