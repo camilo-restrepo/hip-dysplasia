@@ -1,15 +1,11 @@
 import utils
 import valley
 import segmentation
-import bone_boundary
-# import clustering
 import numpy as np
 import matplotlib.pyplot as plt
 from skimage.measure import label, regionprops
 from skimage.morphology import remove_small_objects
 import time
-
-import pickle
 
 
 def get_sides_center_coordinates(image, remove_small_objects_size=80):
@@ -47,23 +43,21 @@ def get_legs(image_array):
     return {'right_leg': right_leg, 'left_leg': left_leg}
 
 
-def iterative_adaptative_reclassification(image):
-
+def show_img(img, ini=35, end=55):
     i = 0
-    for z in range(0, end):
-        if ini <= z <= end:
-            utils.np_show(emphasized_img[z, :, :])
-            utils.np_show(segmented_img[z, :, :])
-            i += 1
-            if i == 10:
-                plt.show()
-                i = 0
-    return result['boundaries_array']
+    for k in range(ini, end):
+        im = img[k, :, :]
+        utils.np_show(im)
+        i += 1
+        if i == 20:
+            plt.show()
+            i = 0
+    plt.show()
 
 
-PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+# PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 # PathDicom = "/Volumes/Files/imagenes/AVILA_MALAGON_ZULMA_IVONNE/TAC_DE_PELVIS_SIMPLE - 89589/_Bone_30_2/"
-# PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
+PathDicom = "/home/camilo/Documents/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 # PathDicom = "/home/camilo/Documents/imagenes/AVILA_MALAGON_ZULMA_IVONNE/TAC_DE_PELVIS_SIMPLE - 89589/_Bone_30_2/"
 
 t0 = time.time()
@@ -76,43 +70,20 @@ boundaries = {}
 for leg_key in legs.keys():
     if leg_key == 'right_leg':
         leg = legs[leg_key]
-        emphasized_img = valley.get_valley_emphasized_image(leg)
-        emphasized_imgs[leg_key] = emphasized_img
-        bone_mask = segmentation.initial_segmentation(emphasized_img)
-        bone_masks[leg_key] = bone_mask
-        e_b = bone_boundary.compute_boundary(bone_mask)
-        boundaries[leg_key] = e_b
+        emphasized_imgs[leg_key] = valley.get_valley_emphasized_image(leg)
+        bone_masks[leg_key] = segmentation.initial_segmentation(emphasized_imgs[leg_key])
+        segmentation.iterative_adaptative_reclassification(emphasized_imgs[leg_key], bone_masks[leg_key])
+
+        # show_img(bone_masks[leg_key])
+        # result = np.zeros_like(emphasized_imgs[leg_key])
+        # np.multiply(emphasized_imgs[leg_key], bone_masks[leg_key], result)
+        # print len(boundaries[leg_key])
+        # for v in boundaries[leg_key]:
+        #     result[v[0], v[1], v[2]] = 1
+        # show_img(result)
 t1 = time.time()
 # print t1-t0  # ----- 26.53049016
 
-result = np.zeros_like(emphasized_imgs['right_leg'])
-# for p in boundaries['right_leg']:
-#     result[p[0], p[1], p[2]] = 1
-
-# result = boundaries['right_leg']
-# result = np.zeros_like(legs['right_leg'])
-# np.multiply(emphasized_imgs['right_leg'], bone_masks['right_leg'], result)
-
-# file = open('emphasized_imgs.txt', 'w')
-# pickle.dump(result, file)
-# file.close()
-
 
 # centroids = clustering.fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
-
 # clustering.modified_fuzzy_cmeans(boundaries['right_leg'], emphasized_imgs['right_leg'])
-
-# ini = 20
-# end = 50
-# i = 0
-# for k in range(ini, end):
-#     im = result[k, :, :]
-#     utils.np_show(im)
-#     # im[im < 0] = 0
-#     # utils.show_hist(im)
-#     i += 1
-#     if i == 20:
-#         plt.show()
-#         i = 0
-#
-# plt.show()

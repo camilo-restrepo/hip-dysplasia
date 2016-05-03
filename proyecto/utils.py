@@ -29,7 +29,7 @@ def sitk_show(img):
 
 def np_show(img):
     plt.figure()
-    plt.imshow(img, cmap='Greys_r')
+    plt.imshow(img, cmap='Greys_r', interpolation="nearest")
 
 
 def histogram_without_background(img):

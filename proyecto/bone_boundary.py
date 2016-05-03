@@ -1,18 +1,17 @@
-import numpy as np
 
 
 def pixel_belongs_to_boundary(img_array, x, y, z):
     pixel = img_array[z, x, y]
     if pixel != 0:
         neighbors = [
-            img_array[z, x - 1, y - 1],
+            # img_array[z, x - 1, y - 1],
             img_array[z, x - 1, y],
-            img_array[z, x - 1, y + 1],
+            # img_array[z, x - 1, y + 1],
             img_array[z, x, y - 1],
             img_array[z, x, y + 1],
-            img_array[z, x + 1, y - 1],
+            # img_array[z, x + 1, y - 1],
             img_array[z, x + 1, y],
-            img_array[z, x + 1, y + 1],
+            # img_array[z, x + 1, y + 1],
             img_array[z - 1, x, y],
             img_array[z + 1, x, y]
         ]
