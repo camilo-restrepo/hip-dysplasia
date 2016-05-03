@@ -1,3 +1,4 @@
+from itertools import product
 
 
 def pixel_belongs_to_boundary(img_array, x, y, z):

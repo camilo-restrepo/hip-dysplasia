@@ -72,7 +72,7 @@ for leg_key in legs.keys():
         leg = legs[leg_key]
         emphasized_imgs[leg_key] = valley.get_valley_emphasized_image(leg)
         bone_masks[leg_key] = segmentation.initial_segmentation(emphasized_imgs[leg_key])
-        segmentation.iterative_adaptative_reclassification(emphasized_imgs[leg_key], bone_masks[leg_key])
+        segmentation.iterative_adaptative_reclassification2(emphasized_imgs[leg_key], bone_masks[leg_key])
 
         # show_img(bone_masks[leg_key])
         # result = np.zeros_like(emphasized_imgs[leg_key])
