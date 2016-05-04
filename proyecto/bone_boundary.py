@@ -1,9 +1,7 @@
-from itertools import product
 
 
 def pixel_belongs_to_boundary(img_array, x, y, z):
-    pixel = img_array[z, x, y]
-    if pixel != 0:
+    if img_array[z, x, y] != 0:
         neighbors = [
             # img_array[z, x - 1, y - 1],
             img_array[z, x - 1, y],
