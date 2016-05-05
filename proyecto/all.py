@@ -8,15 +8,13 @@ import time
 import matplotlib.pyplot as plt
 import utils
 from sklearn import mixture
-from multiprocessing import Pool
-from multiprocessing import Manager
+from multiprocessing import Pool, Manager
 
 
 RIGHT_LEG = 'right_leg'
 LEFT_LEG = 'left_leg'
-manager = Manager()
-windows_cache = manager.dict()
-clustering_cache = manager.dict()
+windows_cache = Manager().dict()
+prediction_cache = dict()
 
 PathDicom = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_30_2/"
 # PathDicom = "/Volumes/Files/imagenes/AVILA_MALAGON_ZULMA_IVONNE/TAC_DE_PELVIS_SIMPLE - 89589/_Bone_30_2/"
@@ -186,7 +184,7 @@ def has_black_neighbors(z, x, y):
 
 
 def get_window(point, size=5, depth=2):
-
+    global windows_cache
     z = point[0]
     x = point[1]
     y = point[2]
@@ -219,9 +217,10 @@ def get_mask_window(point, size=5, depth=2):
     return window
 
 
-def process_px(px):
-    global clustering_cache
-    if px not in clustering_cache:
+def compute_px_model(px):
+    process = px[3]
+    px = (px[0], px[1], px[2])
+    if not process:
         g = mixture.GMM(n_components=2)
         window = windows_cache[px]
         g.fit(np.reshape(window, (window.size, 1)))
@@ -231,31 +230,13 @@ def process_px(px):
         if cntr[0, 0] < cntr[1, 0]:
             v = 1
 
-        predict = np.zeros_like(window)
-        for z in range(0, window.shape[0]):
-            for x in range(0, window.shape[1]):
-                for y in range(0, window.shape[2]):
-                    predict[z, x, y] = g.predict_proba(window[z, x, y])[0, v]
+        predictions = g.predict_proba(np.reshape(window, (window.size, 1)))
+        predictions = np.reshape(predictions[:, v], window.shape)
 
-        predict[predict > 0.5] = 1
-        predict[predict <= 0.5] = 0
-
-        # window_mask = get_mask_window(px)
-        # for z in range(0, window.shape[0]):
-        #     utils.np_show(predict[z, :, :])
-        #     utils.np_show(window_mask[z, :, :])
-        #     utils.np_show(window[z, :, :])
-        # plt.show()
-
-        # cntr, u, u0, d, jm, h, fpc = cmeans2.cmeans(np.reshape(window, (1, window.size)), 2, 2, 0.001, 1000)
-        # v = 0
-        # if cntr[0, 0] < cntr[1, 0]:
-        #     v = 1
-        # result = np.reshape(u[v, :], window.shape)
-        # th = threshold_otsu(result)
-        # result2 = result > th
-
-        clustering_cache[px] = predict
+        predictions[predictions > 0.5] = 1
+        predictions[predictions <= 0.5] = 0
+        return (px, predictions)
+    return (px, None)
 
 
 def compute_boundary():
@@ -264,6 +245,7 @@ def compute_boundary():
     height = mask.shape[2]
     depth = mask.shape[0]
     e_b = set()
+    e_b2 = set()
 
     white_pxs = np.argwhere(mask == 1)
     for r in range(0, white_pxs.shape[0]):
@@ -273,11 +255,11 @@ def compute_boundary():
         # if 35 < z < 55 and 11 < y < width - 11 and 11 < x < height - 11:
             if pixel_belongs_to_boundary(x, y, z):
                 e_b.add((z, x, y))
+                # e_b2.add((z, x, y, (z, x, y) in models_cache))
+                e_b2.add((z, x, y, (z, x, y) in prediction_cache))
                 get_window((z, x, y))
-                # process_px((z, x, y))
-                # break
 
-    return e_b
+    return e_b, e_b2
 
 
 def replace_volume(point, size=5, depth=2):
@@ -298,11 +280,12 @@ def replace_volume(point, size=5, depth=2):
     #     utils.np_show(clustering_cache[point][k, :, :])
     # plt.show()
 
-    result[z_ini:z_end, x_ini:x_end, y_ini:y_end] = clustering_cache[point]
+    result[z_ini:z_end, x_ini:x_end, y_ini:y_end] = prediction_cache[point]
 
 
 def iterative_adaptative_reclassification():
-    boundaries = compute_boundary()
+    global prediction_cache
+    boundaries, boundaries2 = compute_boundary()
     boundaries_old = np.zeros_like(boundaries)
     bone_mask = legs_bone_masks[leg_key]
     bone_mask_old = bone_mask.copy()
@@ -311,7 +294,10 @@ def iterative_adaptative_reclassification():
     while not np.all(boundaries == boundaries_old):
         print len(boundaries)
         t0 = time.time()
-        pool.map(process_px, boundaries)
+        predictions = pool.map(compute_px_model, boundaries2)
+        for prediction in predictions:
+            if prediction[0] not in prediction_cache:
+                prediction_cache[prediction[0]] = prediction[1]
         t1 = time.time()
         print '1: ', t1 - t0
 
@@ -331,22 +317,22 @@ def iterative_adaptative_reclassification():
         print '3: ', t1 - t0
 
         boundaries_old = boundaries.copy()
-        # t0 = time.time()
-        # boundaries = compute_boundary()
-        # t1 = time.time()
-        # print '4: ', t1 - t0
-        print len(boundaries), len(boundaries_old), it
-        # it += 1
+        t0 = time.time()
+        boundaries, boundaries2 = compute_boundary()
+        t1 = time.time()
+        print '4: ', t1 - t0
 
-    i = 0
-    for k in range(35, 45):
-        utils.np_show(bone_mask[k, :, :])
-        utils.np_show(bone_mask_old[k, :, :])
-        i += 1
-        if i == 10:
+        it += 1
+        print len(boundaries), len(boundaries_old), it
+
+        if it % 5 == 0:
+            for k in range(35, 45):
+                fig = plt.figure(k)
+                a = fig.add_subplot(1, 2, 1)
+                imgplot = plt.imshow(bone_mask[k, :, :], cmap='Greys_r', interpolation="nearest")
+                a = fig.add_subplot(1, 2, 2)
+                imgplot = plt.imshow(bone_mask_old[k, :, :], cmap='Greys_r', interpolation="nearest")
             plt.show()
-            i = 0
-    plt.show()
 
 
 # --------------------------------------------------------------------------------------------------------------------
