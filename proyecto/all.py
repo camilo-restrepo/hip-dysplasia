@@ -1,7 +1,7 @@
 import SimpleITK
 import numpy as np
 from skimage.measure import label, regionprops
-from skimage.morphology import remove_small_objects, closing, disk
+from skimage.morphology import remove_small_objects, closing, disk, opening
 from skimage.filters import threshold_otsu
 from scipy import ndimage as ndi
 import time
@@ -162,8 +162,8 @@ def pixel_belongs_to_boundary(x, y, z):
         # mask[z, x + 1, y - 1],
         mask[z, x + 1, y],
         # mask[z, x + 1, y + 1],
-        # mask[z - 1, x, y],
-        # mask[z + 1, x, y]
+        mask[z - 1, x, y],
+        mask[z + 1, x, y]
     ])
     return np.any(neighbors == 0)
 
@@ -223,6 +223,14 @@ def compute_px_model(px):
     if not process:
         g = mixture.GMM(n_components=2)
         window = windows_cache[px]
+
+        # diamond = []
+        # diamond.extend(np.reshape(window[2, :, :], (-1,)))
+        # diamond.append(window[0, 5, 5])
+        # diamond.append(window[4, 5, 5])
+        # diamond.extend(np.reshape(window[1, 3:8, 3:8], (-1,)))
+        # diamond.extend(np.reshape(window[3, 3:8, 3:8], (-1,)))
+        # g.fit(np.reshape(diamond, (len(diamond), 1)))
         g.fit(np.reshape(window, (window.size, 1)))
 
         cntr = g.means_
@@ -233,6 +241,7 @@ def compute_px_model(px):
         predictions = g.predict_proba(np.reshape(window, (window.size, 1)))
         predictions = np.reshape(predictions[:, v], window.shape)
 
+        predictions = predictions[2, :, :]
         predictions[predictions > 0.5] = 1
         predictions[predictions <= 0.5] = 0
         return (px, predictions)
@@ -251,11 +260,11 @@ def compute_boundary():
     for r in range(0, white_pxs.shape[0]):
         px = white_pxs[r, :]
         z, x, y = px[0], px[1], px[2]
-        if 2 < z < depth - 3 and 11 < y < width - 11 and 11 < x < height - 11:
-        # if 35 < z < 55 and 11 < y < width - 11 and 11 < x < height - 11:
+        # if 2 < z < depth - 3 and 11 < y < width - 11 and 11 < x < height - 11:
+        if 35 < z < 55 and 11 < y < width - 11 and 11 < x < height - 11:
+            # if not has_black_neighbors(z, x, y):
             if pixel_belongs_to_boundary(x, y, z):
                 e_b.add((z, x, y))
-                # e_b2.add((z, x, y, (z, x, y) in models_cache))
                 e_b2.add((z, x, y, (z, x, y) in prediction_cache))
                 get_window((z, x, y))
 
@@ -263,7 +272,7 @@ def compute_boundary():
 
 
 def replace_volume(point, size=5, depth=2):
-    result = legs_bone_masks[leg_key]
+    global legs_bone_masks
     z = point[0]
     x = point[1]
     y = point[2]
@@ -275,22 +284,23 @@ def replace_volume(point, size=5, depth=2):
     z_ini = z - depth
     z_end = z + (depth+1)
 
-    # for k in range(0, 5):
-    #     utils.np_show(result[z_ini:z_end, x_ini:x_end, y_ini:y_end][k, :, :])
-    #     utils.np_show(clustering_cache[point][k, :, :])
-    # plt.show()
-
-    result[z_ini:z_end, x_ini:x_end, y_ini:y_end] = prediction_cache[point]
+    # result[z_ini:z_end, x_ini:x_end, y_ini:y_end] = prediction_cache[point]
+    legs_bone_masks[leg_key][z, x_ini:x_end, y_ini:y_end] = prediction_cache[point]
 
 
 def iterative_adaptative_reclassification():
     global prediction_cache
+    global legs_bone_masks
     boundaries, boundaries2 = compute_boundary()
     boundaries_old = np.zeros_like(boundaries)
-    bone_mask = legs_bone_masks[leg_key]
-    bone_mask_old = bone_mask.copy()
+    bone_mask_old = legs_bone_masks[leg_key].copy()
     pool = Pool()
     it = 0
+    selem = np.array([
+        [[0, 0, 0], [0, 1, 0], [0, 0, 0]],
+        [[0, 1, 0], [1, 1, 1], [0, 1, 0]],
+        [[0, 0, 0], [0, 1, 0], [0, 0, 0]]
+    ])
     while not np.all(boundaries == boundaries_old):
         print len(boundaries)
         t0 = time.time()
@@ -301,6 +311,8 @@ def iterative_adaptative_reclassification():
         t1 = time.time()
         print '1: ', t1 - t0
 
+        last = legs_bone_masks[leg_key].copy()
+
         t0 = time.time()
         for px in boundaries:
             replace_volume(px)
@@ -308,10 +320,13 @@ def iterative_adaptative_reclassification():
         print '2: ', t1 - t0
 
         t0 = time.time()
-        for z in range(0, bone_mask.shape[0]):
-            bone_mask[z, :, :] = closing(bone_mask[z, :, :])
-            bone_mask[z, :, :] = ndi.binary_fill_holes(bone_mask[z, :, :])
-            bone_mask[z, :, :] = remove_small_objects(bone_mask[z, :, :], 80)
+        # legs_bone_masks[leg_key] = closing(legs_bone_masks[leg_key], selem=selem)
+        # legs_bone_masks[leg_key] = opening(legs_bone_masks[leg_key], selem=selem)
+
+        for z in range(0, legs_bone_masks[leg_key].shape[0]):
+            legs_bone_masks[leg_key][z, :, :] = closing(legs_bone_masks[leg_key][z, :, :])
+            legs_bone_masks[leg_key][z, :, :] = ndi.binary_fill_holes(legs_bone_masks[leg_key][z, :, :])
+            legs_bone_masks[leg_key][z, :, :] = remove_small_objects(legs_bone_masks[leg_key][z, :, :], 80)
 
         t1 = time.time()
         print '3: ', t1 - t0
@@ -325,12 +340,17 @@ def iterative_adaptative_reclassification():
         it += 1
         print len(boundaries), len(boundaries_old), it
 
-        if it % 5 == 0:
+        if it % 2 == 0:
+            diff = legs_bone_masks[leg_key] - last
             for k in range(35, 45):
                 fig = plt.figure(k)
-                a = fig.add_subplot(1, 2, 1)
-                imgplot = plt.imshow(bone_mask[k, :, :], cmap='Greys_r', interpolation="nearest")
-                a = fig.add_subplot(1, 2, 2)
+                a = fig.add_subplot(1, 4, 1)
+                imgplot = plt.imshow(legs_bone_masks[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+                a = fig.add_subplot(1, 4, 2)
+                imgplot = plt.imshow(last[k, :, :], cmap='Greys_r', interpolation="nearest")
+                a = fig.add_subplot(1, 4, 3)
+                imgplot = plt.imshow(diff[k, :, :], cmap='Greys_r', interpolation="nearest")
+                a = fig.add_subplot(1, 4, 4)
                 imgplot = plt.imshow(bone_mask_old[k, :, :], cmap='Greys_r', interpolation="nearest")
             plt.show()
 
@@ -345,11 +365,28 @@ legs = get_legs()
 emphasized_legs = {}
 legs_bone_masks = {}
 legs_boundaries = {}
+valleys = {}
+
 
 for leg_key in legs.keys():
     if leg_key == RIGHT_LEG:
         emphasized_legs[leg_key] = get_valley_emphasized_image()
         legs_bone_masks[leg_key] = initial_segmentation()
+
+        #valleys[leg_key] = get_valley_image()
+
+        # for k in range(35, 45):
+        #     fig = plt.figure(k)
+        #     a = fig.add_subplot(1, 4, 1)
+        #     imgplot = plt.imshow(legs_bone_masks[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     a = fig.add_subplot(1, 4, 2)
+        #     imgplot = plt.imshow(valleys[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     a = fig.add_subplot(1, 4, 3)
+        #     imgplot = plt.imshow(emphasized_legs[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     a = fig.add_subplot(1, 4, 4)
+        #     # imgplot = plt.imshow(v_bin[k, :, :], cmap='Greys_r', interpolation="nearest")
+        # plt.show()
+
         iterative_adaptative_reclassification()
 
         # i = 0
@@ -371,22 +408,3 @@ for leg_key in legs.keys():
         # for v in b:
         #     test[v[0], v[1], v[2]] = 1
         # show_img(test)
-
-# image = emphasized_legs[leg_key]
-# result = np.zeros_like(image)
-# threshold = threshold_otsu(image)
-# binary_img = image > threshold
-# np.multiply(image, binary_img, result)
-# result[result == 0] = -1000
-#
-# # show_img(result)
-# pxs = []
-# vals = np.argwhere(result != -1000)
-# for r in range(0, vals.shape[0]):
-#     px = vals[r, :]
-#     z, x, y = px[0], px[1], px[2]
-#     pxs.append(result[z, x, y])
-#
-# g = mixture.GMM(n_components=2)
-# g.fit(np.reshape(pxs, (len(pxs), 1)))
-# print g.means_

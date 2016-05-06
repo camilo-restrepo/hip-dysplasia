@@ -54,6 +54,11 @@ def get_stats(img):
     return {"mean": np.mean(img_array), "std": np.std(img_array), "max": np.max(img_array), "min": np.min(img_array)}
 
 
-def show_hist(img):
+def show_complete_hist(img):
+    plt.figure()
+    plt.hist(img.ravel(), bins=256, range=(np.min(img), np.max(img)), fc='k', ec='k')
+
+
+def show_positive_hist(img):
     plt.figure()
     plt.hist(img.ravel(), bins=256, range=(1, np.max(img)), fc='k', ec='k')
