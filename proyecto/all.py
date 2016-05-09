@@ -39,8 +39,17 @@ def show_img(img, ini=35, end=55):
 # --------------------------------------------------------------------------------------------------------------------
 
 
-def remove_noise(sitk_image):
+def remove_noise_curvature_flow(sitk_image):
     smooth_filter = SimpleITK.CurvatureFlowImageFilter()
+    smooth_filter.SetTimeStep(0.125)
+    smooth_filter.SetNumberOfIterations(5)
+    img_smooth = smooth_filter.Execute(sitk_image)
+    return SimpleITK.GetArrayFromImage(img_smooth)
+
+
+def remove_noise_anisotropic(sitk_image):
+    # TODO
+    smooth_filter = SimpleITK.GradientAnisotropicDiffusionImageFilter()
     smooth_filter.SetTimeStep(0.125)
     smooth_filter.SetNumberOfIterations(5)
     img_smooth = smooth_filter.Execute(sitk_image)
@@ -52,7 +61,7 @@ def load_dicom():
     filenames_dicom = reader.GetGDCMSeriesFileNames(PathDicom)
     reader.SetFileNames(filenames_dicom)
     img_original = reader.Execute()
-    smooth_array = remove_noise(img_original)
+    smooth_array = remove_noise_curvature_flow(img_original)
     original_array = SimpleITK.GetArrayFromImage(img_original)
     return original_array, smooth_array
 
@@ -371,23 +380,22 @@ valleys = {}
 for leg_key in legs.keys():
     if leg_key == RIGHT_LEG:
         emphasized_legs[leg_key] = get_valley_emphasized_image()
-        legs_bone_masks[leg_key] = initial_segmentation()
+        # legs_bone_masks[leg_key] = initial_segmentation()
+        valleys[leg_key] = get_valley_image()
 
-        #valleys[leg_key] = get_valley_image()
-
-        # for k in range(35, 45):
-        #     fig = plt.figure(k)
-        #     a = fig.add_subplot(1, 4, 1)
-        #     imgplot = plt.imshow(legs_bone_masks[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
-        #     a = fig.add_subplot(1, 4, 2)
-        #     imgplot = plt.imshow(valleys[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+        for k in range(35, 45):
+            fig = plt.figure(k)
+            a = fig.add_subplot(1, 2, 1)
+            imgplot = plt.imshow(emphasized_legs[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+            a = fig.add_subplot(1, 2, 2)
+            imgplot = plt.imshow(valleys[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
         #     a = fig.add_subplot(1, 4, 3)
         #     imgplot = plt.imshow(emphasized_legs[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
         #     a = fig.add_subplot(1, 4, 4)
         #     # imgplot = plt.imshow(v_bin[k, :, :], cmap='Greys_r', interpolation="nearest")
-        # plt.show()
+        plt.show()
 
-        iterative_adaptative_reclassification()
+        # iterative_adaptative_reclassification()
 
         # i = 0
         # for k in range(35, 55):
