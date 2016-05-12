@@ -313,19 +313,23 @@ for leg_key in legs.keys():
         # valley = get_valley_image()
         # valley2 = get_valley_image2()
 
-
+        #         for k in range(30, 51):
         # for k in range(0, no_noise[leg_key].shape[0]):
-        for k in range(30, 51):
-            fig = plt.figure(k)
-            a = fig.add_subplot(1, 4, 1)
-            imgplot = plt.imshow(emphasized[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
-            a = fig.add_subplot(1, 4, 2)
-            imgplot = plt.imshow(segmented[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
-            a = fig.add_subplot(1, 4, 3)
-            imgplot = plt.imshow(femur[k, :, :], cmap='Greys_r', interpolation="nearest")
-            a = fig.add_subplot(1, 4, 4)
-            imgplot = plt.imshow(segmented[leg_key][k, :, :] - femur[k, :, :], cmap='Greys_r', interpolation="nearest")
-            if k % 20 == 0:
-                plt.show()
-        plt.show()
+        #     fig = plt.figure(k)
+        #     a = fig.add_subplot(1, 4, 1)
+        #     imgplot = plt.imshow(emphasized[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     a = fig.add_subplot(1, 4, 2)
+        #     imgplot = plt.imshow(segmented[leg_key][k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     a = fig.add_subplot(1, 4, 3)
+        #     imgplot = plt.imshow(femur[k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     a = fig.add_subplot(1, 4, 4)
+        #     imgplot = plt.imshow(segmented[leg_key][k, :, :] - femur[k, :, :], cmap='Greys_r', interpolation="nearest")
+        #     if k % 20 == 0:
+        #         plt.show()
+        # plt.show()
+
+        # import pickle
+        # file = open('femur.txt', 'w')
+        # pickle.dump(femur, file)
+        # file.close()
 
