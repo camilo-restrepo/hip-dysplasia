@@ -25,7 +25,7 @@ module. They implement the Morphological Geodesic Active Contours and the
 Morphological Active Contours without Edges, respectively. See the
 aforementioned paper for full details.
 
-See test.py for examples of usage.
+See main.py for examples of usage.
 """
 
 __author__ = "P. Márquez Neila <p.mneila@upm.es>"
