@@ -62,3 +62,12 @@ def show_complete_hist(img):
 def show_positive_hist(img):
     plt.figure()
     plt.hist(img.ravel(), bins=256, range=(1, np.max(img)), fc='k', ec='k')
+
+
+class Formatter(object):
+    def __init__(self, im):
+        self.im = im
+
+    def __call__(self, x, y):
+        z = self.im[int(y), int(x)]
+        return 'x={:.01f}, y={:.01f}, z={:.01f}'.format(x, y, z)

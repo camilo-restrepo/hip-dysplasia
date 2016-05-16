@@ -17,18 +17,28 @@ class MainWindow(QtGui.QMainWindow):
 
         self.vtkWidget_right_femur = QVTKRenderWindowInteractor(self.frame)
         self.vtkWidget_right_hip = QVTKRenderWindowInteractor(self.frame)
+        self.vtkWidget_left_femur = QVTKRenderWindowInteractor(self.frame)
+        self.vtkWidget_left_hip = QVTKRenderWindowInteractor(self.frame)
 
         self.vl.addWidget(self.vtkWidget_right_femur, 0, 0)
         self.vl.addWidget(self.vtkWidget_right_hip, 0, 1)
+        self.vl.addWidget(self.vtkWidget_left_femur, 1, 0)
+        self.vl.addWidget(self.vtkWidget_left_hip, 1, 1)
 
         self.ren_right_femur = vtk.vtkRenderer()
         self.ren_right_hip = vtk.vtkRenderer()
+        self.ren_left_femur = vtk.vtkRenderer()
+        self.ren_left_hip = vtk.vtkRenderer()
 
         self.vtkWidget_right_femur.GetRenderWindow().AddRenderer(self.ren_right_femur)
         self.vtkWidget_right_hip.GetRenderWindow().AddRenderer(self.ren_right_hip)
+        self.vtkWidget_left_femur.GetRenderWindow().AddRenderer(self.ren_left_femur)
+        self.vtkWidget_left_hip.GetRenderWindow().AddRenderer(self.ren_left_hip)
 
         self.iren_right_femur = self.vtkWidget_right_femur.GetRenderWindow().GetInteractor()
         self.iren_right_hip = self.vtkWidget_right_hip.GetRenderWindow().GetInteractor()
+        self.iren_left_femur = self.vtkWidget_left_femur.GetRenderWindow().GetInteractor()
+        self.iren_left_hip = self.vtkWidget_left_hip.GetRenderWindow().GetInteractor()
 
         openFile = QtGui.QAction(QtGui.QIcon('open.png'), 'Open', self)
         openFile.setShortcut('Ctrl+O')
@@ -61,12 +71,18 @@ class MainWindow(QtGui.QMainWindow):
     def clean_gui(self):
         self.ren_right_femur = vtk.vtkRenderer()
         self.ren_right_hip = vtk.vtkRenderer()
+        self.ren_left_femur = vtk.vtkRenderer()
+        self.ren_left_hip = vtk.vtkRenderer()
 
         self.vtkWidget_right_femur.GetRenderWindow().AddRenderer(self.ren_right_femur)
         self.vtkWidget_right_hip.GetRenderWindow().AddRenderer(self.ren_right_hip)
+        self.vtkWidget_left_femur.GetRenderWindow().AddRenderer(self.ren_left_femur)
+        self.vtkWidget_left_hip.GetRenderWindow().AddRenderer(self.ren_left_hip)
 
         self.iren_right_femur = self.vtkWidget_right_femur.GetRenderWindow().GetInteractor()
         self.iren_right_hip = self.vtkWidget_right_hip.GetRenderWindow().GetInteractor()
+        self.iren_left_femur = self.vtkWidget_left_femur.GetRenderWindow().GetInteractor()
+        self.iren_left_hip = self.vtkWidget_left_hip.GetRenderWindow().GetInteractor()
 
     def process_hips(self):
         hips = self.image_processing.segmented_hips.copy()
@@ -76,6 +92,10 @@ class MainWindow(QtGui.QMainWindow):
                 self.ren_right_hip.AddActor(actor)
                 self.ren_right_hip.ResetCamera()
                 self.iren_right_hip.Initialize()
+            else:
+                self.ren_left_hip.AddActor(actor)
+                self.ren_left_hip.ResetCamera()
+                self.iren_left_hip.Initialize()
 
     def process_femurs(self):
         femurs = self.image_processing.segmented_legs.copy()
@@ -85,6 +105,10 @@ class MainWindow(QtGui.QMainWindow):
                 self.ren_right_femur.AddActor(actor)
                 self.ren_right_femur.ResetCamera()
                 self.iren_right_femur.Initialize()
+            else:
+                self.ren_left_femur.AddActor(actor)
+                self.ren_left_femur.ResetCamera()
+                self.iren_left_femur.Initialize()
 
     def process_image(self, image):
         dims = image.shape

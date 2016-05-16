@@ -24,17 +24,17 @@ def simple_2d_binary_region_growing(image, seed_points, mean_centroid):
         if image[x, y] == 1:
             visited.add(px)
 
-            if 0 < x - 1 < height and 0 < y - 1 < width:
-                if image[x - 1, y - 1] == 1 and (z, x - 1, y - 1) not in visited:
-                    queue.add((z, x - 1, y - 1))
+            # if 0 < x - 1 < height and 0 < y - 1 < width:
+            #     if image[x - 1, y - 1] == 1 and (z, x - 1, y - 1) not in visited:
+            #         queue.add((z, x - 1, y - 1))
 
             if 0 < x - 1 < height and 0 < y < width:
                 if image[x - 1, y] == 1 and (z, x - 1, y) not in visited:
                     queue.add((z, x - 1, y))
 
-            if 0 < x - 1 < height and 0 < y + 1 < width:
-                if image[x - 1, y + 1] == 1 and (z, x - 1, y + 1) not in visited:
-                    queue.add((z, x - 1, y + 1))
+            # if 0 < x - 1 < height and 0 < y + 1 < width:
+            #     if image[x - 1, y + 1] == 1 and (z, x - 1, y + 1) not in visited:
+            #         queue.add((z, x - 1, y + 1))
 
             if 0 < x < height and 0 < y - 1 < width:
                 if image[x, y - 1] == 1 and (z, x, y - 1) not in visited:
@@ -53,16 +53,16 @@ def simple_2d_binary_region_growing(image, seed_points, mean_centroid):
                 if image[x, y + 1] == 1 and (z, x, y + 1) not in visited:
                     queue.add((z, x, y + 1))
 
-            if 0 < x + 1 < height and 0 < y - 1 < width:
-                if image[x + 1, y - 1] == 1 and (z, x + 1, y - 1) not in visited:
-                    queue.add((z, x + 1, y - 1))
+            # if 0 < x + 1 < height and 0 < y - 1 < width:
+            #     if image[x + 1, y - 1] == 1 and (z, x + 1, y - 1) not in visited:
+            #         queue.add((z, x + 1, y - 1))
 
             if 0 < x + 1 < height and 0 < y < width:
                 if image[x + 1, y] == 1 and (z, x + 1, y) not in visited:
                     queue.add((z, x + 1, y))
 
-            if 0 < x + 1 < height and 0 < y + 1 < width:
-                if image[x + 1, y + 1] == 1 and (z, x + 1, y + 1) not in visited:
-                    queue.add((z, x + 1, y + 1))
+            # if 0 < x + 1 < height and 0 < y + 1 < width:
+            #     if image[x + 1, y + 1] == 1 and (z, x + 1, y + 1) not in visited:
+            #         queue.add((z, x + 1, y + 1))
 
     return visited
