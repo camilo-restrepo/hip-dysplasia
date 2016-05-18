@@ -3,14 +3,11 @@ import numpy as np
 from skimage.morphology import remove_small_objects, closing, disk, erosion, dilation
 from skimage.measure import label, regionprops
 from scipy import ndimage as ndi
-from scipy.spatial.distance import euclidean
 from skimage.segmentation import clear_border
 import region_growing
 import matplotlib.pyplot as plt
 from utils import Formatter
-from sklearn import mixture
 from skimage.filters import threshold_otsu
-from sklearn.cluster import KMeans
 
 
 class ImageProcessing:
@@ -20,31 +17,19 @@ class ImageProcessing:
         self.PathDicom = ''
         self.leg_key = ''
         self.spacing = ()
-        self.no_noise = {}
-        self.emphasized = {}
-        self.initial_segmented = {}
+
         self.segmented_legs = {}
         self.segmented_hips = {}
         self.legs = {}
-        self.img_original_array = np.empty((512, 512, 90))
-        self.boundaries = {}
-        self.img_boundaries = {}
-        self.valleys = {}
 
     def initialize(self):
         self.PathDicom = ''
         self.leg_key = ''
         self.spacing = ()
-        self.no_noise = {}
-        self.emphasized = {}
-        self.initial_segmented = {}
+
         self.segmented_legs = {}
         self.segmented_hips = {}
         self.legs = {}
-        self.img_original_array = np.empty((512, 512, 90))
-        self.boundaries = {}
-        self.img_boundaries = {}
-        self.valleys = {}
 
     # --------------------------------------------------------------------------------------------------------------------
     # LOAD DATA
@@ -63,17 +48,15 @@ class ImageProcessing:
     # SEPARATE LEGS
     # --------------------------------------------------------------------------------------------------------------------
 
-    def get_sides_center_coordinates(self, remove_small_objects_size=80):
-        bone = np.zeros_like(self.img_original_array[0, :, :])
-        bone[self.img_original_array[0, :, :] < 200] = 0
-        bone[self.img_original_array[0, :, :] > 200] = 1
+    def get_sides_center_coordinates(self, img_original_array, remove_small_objects_size=80):
+        bone = np.zeros_like(img_original_array[0, :, :])
+        bone[img_original_array[0, :, :] < 200] = 0
+        bone[img_original_array[0, :, :] > 200] = 1
 
         bone = remove_small_objects(bone.astype(bool), remove_small_objects_size)
         label_image = label(bone)
 
-        centroids = []
-        for region in regionprops(label_image):
-            centroids.append(region.centroid)
+        centroids = [region.centroid for region in regionprops(label_image)]
         return centroids
 
     def get_rows(self, row):
@@ -84,16 +67,15 @@ class ImageProcessing:
         return {'row_ini': row_ini, 'row_end': row_end}
 
     def get_legs(self):
-        centroids = self.get_sides_center_coordinates()
+        img_original_array = self.load_dicom()
+        centroids = self.get_sides_center_coordinates(img_original_array)
         row1 = centroids[0][0].astype(int)
         rows = self.get_rows(row1)
-        # right_leg = img_smooth_array[:, rows['row_ini']:rows['row_end'], 0:256]
-        right_leg = self.img_original_array[:, rows['row_ini']:rows['row_end'], 0:256]
+        right_leg = img_original_array[:, rows['row_ini']:rows['row_end'], 0:256]
 
         row2 = centroids[1][0].astype(int)
         rows = self.get_rows(row2)
-        # left_leg = img_smooth_array[:, rows['row_ini']:rows['row_end'], 256:]
-        left_leg = self.img_original_array[:, rows['row_ini']:rows['row_end'], 256:]
+        left_leg = img_original_array[:, rows['row_ini']:rows['row_end'], 256:]
 
         return {self.RIGHT_LEG: right_leg, self.LEFT_LEG: left_leg}
 
@@ -109,209 +91,69 @@ class ImageProcessing:
         img_smooth = smooth_filter.Execute(sitk_image)
         return SimpleITK.GetArrayFromImage(img_smooth)
 
-    def remove_noise_anisotropic(self):
-        sitk_image = SimpleITK.GetImageFromArray(self.legs[self.leg_key])
-        sitk_image = SimpleITK.Cast(sitk_image, SimpleITK.sitkFloat64)
-
-        extract_filter = SimpleITK.ExtractImageFilter()
-        extract_filter.SetSize([self.legs[self.leg_key].shape[1], self.legs[self.leg_key].shape[2], 0])
-
-        smooth_filter = SimpleITK.GradientAnisotropicDiffusionImageFilter()
-        smooth_filter.SetTimeStep(0.06)
-        smooth_filter.SetNumberOfIterations(50)
-        smooth_filter.SetConductanceParameter(0.5)
-
-        img_smooth = SimpleITK.GetArrayFromImage(smooth_filter.Execute(sitk_image))
-
-        # img_smooth = np.zeros(legs[leg_key].shape)
-        # for z in range(0, img_smooth.shape[0]):
-        #     extract_filter.SetIndex([0, 0, z])
-        #     img_smooth[z, :, :] = SimpleITK.GetArrayFromImage(smooth_filter.Execute(sitk_image[:, :, z]))
-        return img_smooth
-
     # --------------------------------------------------------------------------------------------------------------------
     # VALLEY COMPUTATION
     # --------------------------------------------------------------------------------------------------------------------
 
-    def get_valley_image(self):
-        image = self.no_noise[self.leg_key]
+    def get_valley_image(self, image):
         valley_img = np.zeros_like(image)
         for z in range(0, image.shape[0]):
             valley_img[z, :, :] = closing(image[z, :, :], disk(5))
-        valley_img = valley_img - image
+        valley_img -= image
 
         return valley_img
 
-    def get_binary_valley_image(self):
-        image = self.no_noise[self.leg_key]
-        valley_img = np.zeros_like(image)
-        for z in range(0, image.shape[0]):
-            valley_img[z, :, :] = closing(image[z, :, :], disk(5))
-        valley_img = valley_img - image
-
-        tmp = np.zeros(valley_img.shape)
-        tmp[valley_img > 60] = 1
-        tmp[valley_img < 60] = 0
-        for z in range(0, image.shape[0]):
-            tmp[z, :, :] = remove_small_objects(tmp[z, :, :].astype(bool), 20)
-            tmp[z, :, :] = ndi.binary_fill_holes(tmp[z, :, :])
-
-        return tmp
-
     def get_valley_emphasized_image(self):
-        image = self.no_noise[self.leg_key]
-        valley_image = self.get_valley_image()
+        image = self.remove_noise_curvature_flow()
+        valley_image = self.get_valley_image(image)
         valley_image = image - valley_image
         return valley_image
-
-    # --------------------------------------------------------------------------------------------------------------------
-    # ITERATIVE ADAPTATIVE RECLASSIFICATION
-    # --------------------------------------------------------------------------------------------------------------------
-
-    def get_window(self, point, size=5, depth=1):
-        z = point[0]
-        x = point[1]
-        y = point[2]
-
-        image = self.emphasized[self.leg_key]
-        x_ini = x - size
-        x_end = x + (size + 1)
-        y_ini = y - size
-        y_end = y + (size + 1)
-        z_ini = z - depth
-        z_end = z + (depth + 1)
-        window = image[z_ini:z_end, x_ini:x_end, y_ini:y_end]
-        return window
-
-    def compute_px_model(self, px):
-        process = px[3]
-        px = (px[0], px[1], px[2])
-        if not process:
-            g = mixture.GMM(n_components=2)
-            window = self.get_window(px)
-
-            g.fit(np.reshape(window, (window.size, 1)))
-
-            cntr = g.means_
-            v = 0
-            if cntr[0, 0] < cntr[1, 0]:
-                v = 1
-
-            predictions = g.predict_proba(np.reshape(window, (window.size, 1)))
-            predictions = np.reshape(predictions[:, v], window.shape)
-
-            predictions = predictions[2, :, :]
-            predictions[predictions > 0.5] = 1
-            predictions[predictions <= 0.5] = 0
-            return (px, predictions)
-        return (px, None)
-
-    def pixel_belongs_to_boundary(self, x, y, z):
-        mask = self.initial_segmented[self.leg_key]
-        neighbors = np.array([
-            # mask[z, x - 1, y - 1],
-            mask[z, x - 1, y],
-            # mask[z, x - 1, y + 1],
-            mask[z, x, y - 1],
-            mask[z, x, y + 1],
-            # mask[z, x + 1, y - 1],
-            mask[z, x + 1, y],
-            # mask[z, x + 1, y + 1],
-            mask[z - 1, x, y],
-            mask[z + 1, x, y]
-        ])
-        return np.any(neighbors == 0)
-
-    def compute_boundary(self):
-        mask = self.initial_segmented[self.leg_key]
-        width = mask.shape[1]
-        height = mask.shape[2]
-        depth = mask.shape[0]
-        e_b = set()
-        bound = np.zeros_like(mask)
-
-        white_pxs = np.argwhere(mask == 1)
-        print len(white_pxs)
-        for r in range(0, white_pxs.shape[0]):
-            px = white_pxs[r, :]
-            z, x, y = px[0], px[1], px[2]
-            if 2 < z < depth - 3 and 11 < y < width - 11 and 11 < x < height - 11:
-                # if not has_black_neighbors(z, x, y):
-                if self.pixel_belongs_to_boundary(x, y, z):
-                    e_b.add((z, x, y))
-                    bound[z, x, y] = 1
-                    # e_b2.add((z, x, y, (z, x, y) in prediction_cache))
-                    # get_window((z, x, y))
-
-        return e_b, bound
 
     # --------------------------------------------------------------------------------------------------------------------
     # INITIAL SEGMENTATION
     # --------------------------------------------------------------------------------------------------------------------
 
-    def initial_segmentation(self):
-        image = self.emphasized[self.leg_key]
-        binary_img = np.zeros_like(image)
-        for z in range(0, image.shape[0]):
-            th = threshold_otsu(image[z, :, :])
-            binary_img[z, :, :] = image[z, :, :] > th
-            tmp = np.multiply(image[z, :, :], binary_img[z, :, :])
+    def initial_segmentation(self, emphasized):
+        binary_img = np.zeros_like(emphasized)
+        for z in range(0, emphasized.shape[0]):
+            th = threshold_otsu(emphasized[z, :, :])
+            binary_img[z, :, :] = emphasized[z, :, :] > th
+            tmp = np.multiply(emphasized[z, :, :], binary_img[z, :, :])
             tmp[tmp < 0] = 0
             th = threshold_otsu(tmp)
             binary_img[z, :, :] = tmp > th
-            binary_img[z, :, :] = clear_border(binary_img[z, :, :])
             binary_img[z, :, :] = remove_small_objects(binary_img[z, :, :].astype(bool), 5)
 
-            # if 130 <= z <= image.shape[0]:
+            # print th
+            # if 100 <= z <= image.shape[0]:
             #     fig = plt.figure(z)
-            #     a = fig.add_subplot(1, 2, 1)
+            #     a = fig.add_subplot(1, 3, 1)
             #     imgplot = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
             #     a.format_coord = Formatter(image[z, :, :])
-            #     a = fig.add_subplot(1, 2, 2)
+            #     a = fig.add_subplot(1, 3, 2)
+            #     imgplot = plt.imshow(tmp, cmap='Greys_r', interpolation="none")
+            #     a = fig.add_subplot(1, 3, 3)
             #     imgplot = plt.imshow(binary_img[z, :, :], cmap='Greys_r', interpolation="none")
             #     plt.show()
         return binary_img
 
-    def initial_segmentation_erosion_dilation(self):
-        binary_img = self.initial_segmented[self.leg_key].copy()
+    def otsu_segmentation_low_threshold(self, emphasized):
+        binary_img = np.zeros_like(emphasized)
+        for z in range(0, emphasized.shape[0]):
+            th = threshold_otsu(emphasized[z, :, :])
+            binary_img[z, :, :] = emphasized[z, :, :] > th
+            tmp = np.multiply(emphasized[z, :, :], binary_img[z, :, :])
+            tmp[tmp < 0] = 0
+            th = threshold_otsu(tmp)
 
-        selem = np.array([
-            [0, 1, 1, 1, 0],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [0, 1, 1, 1, 0]
-        ])
-
-        for z in range(0, binary_img.shape[0]):
-            img = binary_img[z, :, :]
-            for j in range(0, 2):
-                img = erosion(img, selem)
-            for j in range(0, 2):
-                img = dilation(img, selem)
-            # if 25 <= z <= 41:
-            #     fig = plt.figure(z)
-            #     a = fig.add_subplot(1, 2, 1)
-            #     imgplot = plt.imshow(binary_img[z, :, :], cmap='Greys_r', interpolation="none")
-            #     a = fig.add_subplot(1, 2, 2)
-            #     imgplot = plt.imshow(img, cmap='Greys_r', interpolation="none")
-            #     plt.show()
-
-            binary_img[z, :, :] = img
-
+            binary_img[z, :, :] = tmp > th - 100
+            # binary_img[z, :, :] = clear_border(binary_img[z, :, :])
+            binary_img[z, :, :] = remove_small_objects(binary_img[z, :, :].astype(bool), 5)
         return binary_img
 
-    def get_femur(self):
-        segmented_leg = self.initial_segmented[self.leg_key].copy()
+    def get_femur(self, initial_segmentation, otsu_low_threshold):
+        segmented_leg = initial_segmentation.copy()
         coordinates = []
-
-        selem = np.array([
-            [0, 1, 1, 1, 0],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [1, 1, 1, 1, 1],
-            [0, 1, 1, 1, 0]
-        ])
 
         if self.leg_key == self.LEFT_LEG:
             for z in range(0, segmented_leg.shape[0]):
@@ -326,8 +168,8 @@ class ImageProcessing:
                 seed_points.add((z, px[0], px[1]))
 
             label_image = label(image[z - 1, :, :])
-            for region in regionprops(label_image):
-                coordinates.append(region.centroid[1])
+
+            coordinates = [region.centroid[1] for region in regionprops(label_image)]
             promedio = np.mean(coordinates)
             coordinates = [promedio]
 
@@ -337,17 +179,18 @@ class ImageProcessing:
             for px in region:
                 image[z, px[1], px[2]] = 1
 
-            for j in range(0, 3):
-                image[z, :, :] = dilation(image[z, :, :], disk(2))
-            image[z, :, :] = ndi.binary_fill_holes(image[z, :, :])
-            for j in range(0, 3):
-                image[z, :, :] = erosion(image[z, :, :], disk(2))
+            image[z, :, :] = self.fill_holes(image[z, :, :], disk(2), 3)
 
-            # if 44 <= z <= segmented_leg.shape[0]:
+            # if 100 <= z <= segmented_leg.shape[0]:
+            # if z == 111 or z == 105 or z == 106:
             #     fig = plt.figure(z)
-            #     fig.add_subplot(1, 2, 1)
+            #     fig.add_subplot(1, 4, 1)
             #     plt.imshow(segmented_leg[z, :, :], cmap='Greys_r', interpolation="none")
-            #     fig.add_subplot(1, 2, 2)
+            #     fig.add_subplot(1, 4, 2)
+            #     plt.imshow(image[z - 1, :, :], cmap='Greys_r', interpolation="none")
+            #     fig.add_subplot(1, 4, 3)
+            #     plt.imshow(image[z - 1, :, :] + segmented_leg[z, :, :], cmap='Greys_r', interpolation="none")
+            #     fig.add_subplot(1, 4, 4)
             #     plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
             #     plt.show()
 
@@ -355,13 +198,48 @@ class ImageProcessing:
             for z in range(0, image.shape[0]):
                 image[z, :, :] = np.fliplr(image[z, :, :])
 
-        return image
+        result = np.zeros_like(otsu_low_threshold)
+        for z in range(0, otsu_low_threshold.shape[0]):
+            seed_points = set()
+            white_pxs = np.argwhere(image[z, :, :] == 1)
+            for px in white_pxs:
+                seed_points.add((z, px[0], px[1]))
 
-    def get_hip(self):
-        initial_seg = self.initial_segmented[self.leg_key]
+            region = region_growing.simple_2d_binary_region_growing2(otsu_low_threshold[z, :, :], seed_points)
+
+            for px in region:
+                result[z, px[1], px[2]] = 1
+
+            result[z, :, :] = self.fill_holes(result[z, :, :], disk(2), 1)
+
+            # if 44 <= z <= image.shape[0] and self.leg_key == self.LEFT_LEG:
+            # if z == 111 or z == 105 or z == 106:
+            #     fig = plt.figure(z)
+            #     a = fig.add_subplot(1, 4, 1)
+            #     imgplot = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
+            #     a.format_coord = Formatter(image[z, :, :])
+            #     a = fig.add_subplot(1, 4, 2)
+            #     imgplot = plt.imshow(binary_img[z, :, :], cmap='Greys_r', interpolation="none")
+            #     a = fig.add_subplot(1, 4, 3)
+            #     imgplot = plt.imshow(image[z, :, :] + binary_img[z, :, :], cmap='Greys_r', interpolation="none")
+            #     a = fig.add_subplot(1, 4, 4)
+            #     imgplot = plt.imshow(result[z, :, :], cmap='Greys_r', interpolation="none")
+            #     plt.show()
+
+        return result
+
+    def get_hip(self, initial_segmentation, otsu_low_threshold):
         femur = self.segmented_legs[self.leg_key]
-        result = initial_seg - femur
-        result[result < 0] = 0
+        last_femur_slice = 0
+        removed_elems = False
+        for z in range(0, femur.shape[0]):
+            if np.any(femur[z, :, :] == 1):
+                last_femur_slice = z
+            else:
+                break
+
+        image = initial_segmentation - femur
+        image[image < 0] = 0
 
         selem = np.array([
             [0, 1, 1, 1, 0],
@@ -371,28 +249,64 @@ class ImageProcessing:
             [0, 1, 1, 1, 0]
         ])
 
-        for z in range(0, result.shape[0]):
-            img = result[z, :, :]
-            img = remove_small_objects(img.astype(bool), 20)
-            for j in range(0, 3):
-                img = dilation(img, selem)
-            img = ndi.binary_fill_holes(img)
-            for j in range(0, 3):
-                img = erosion(img, selem)
-            img = remove_small_objects(img.astype(bool), 150)
-            # img = clear_border(img)
+        result = np.zeros_like(otsu_low_threshold)
+        for z in range(0, otsu_low_threshold.shape[0]):
+            seed_points = set()
+            white_pxs = np.argwhere(image[z, :, :] == 1)
+            for px in white_pxs:
+                seed_points.add((z, px[0], px[1]))
 
-            # if 44 <= z <= result.shape[0]:
+            region = region_growing.simple_2d_binary_region_growing2(otsu_low_threshold[z, :, :], seed_points)
+
+            for px in region:
+                result[z, px[1], px[2]] = 1
+
+            result[z, :, :] = ndi.binary_fill_holes(result[z, :, :])
+            result[z, :, :] = remove_small_objects(result[z, :, :].astype(bool), 50)
+
+            if np.any(result[z, :, :] == 1) and z > last_femur_slice:
+                result[z, :, :] = clear_border(result[z, :, :])
+                label_image = label(result[z, :, :])
+                regions = regionprops(label_image)
+                promedio = np.mean([r.area for r in regions])
+
+                for region in regions:
+                    if (region.area < promedio) or (region.centroid[1] > 200 and z > last_femur_slice and self.leg_key == self.RIGHT_LEG) or (region.centroid[1] < 50 and z > last_femur_slice and self.leg_key == self.LEFT_LEG):
+                        for coord in region.coords:
+                            result[z, coord[0], coord[1]] = 0
+            elif z > last_femur_slice and np.all(result[z, :, :] == 0) and not removed_elems:
+                result[z:, :, :] = 0
+                removed_elems = True
+
+            result[z, :, :] = self.fill_holes(result[z, :, :], disk(1), 1)
+            result[z, :, :] = remove_small_objects(result[z, :, :].astype(bool), 150)
+
+            # if 100 <= z <= result.shape[0]:
             #     fig = plt.figure(z)
             #     fig.add_subplot(1, 2, 1)
-            #     plt.imshow(result[z, :, :], cmap='Greys_r', interpolation="none")
+            #     plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
             #     fig.add_subplot(1, 2, 2)
-            #     plt.imshow(img, cmap='Greys_r', interpolation="none")
+            #     plt.imshow(result[z, :, :], cmap='Greys_r', interpolation="none")
             #     plt.show()
 
-            result[z, :, :] = img
+        # label_image = label(result)
+        # for region in regionprops(label_image):
+        #     print region.area
+
         return result
 
+# --------------------------------------------------------------------------------------------------------------------
+# UTILS
+# --------------------------------------------------------------------------------------------------------------------
+
+    def fill_holes(self, binary_image, selem, iterations):
+        image = binary_image.copy()
+        for j in range(0, iterations):
+            image = dilation(image, selem)
+        image = ndi.binary_fill_holes(image)
+        for j in range(0, iterations):
+            image = erosion(image, selem)
+        return image
 
 # --------------------------------------------------------------------------------------------------------------------
 # EXECUTION
@@ -401,13 +315,12 @@ class ImageProcessing:
     def execute(self, folder_path):
         self.initialize()
         self.PathDicom = folder_path
-        self.img_original_array = self.load_dicom()
         self.legs = self.get_legs()
 
         for leg_key in self.legs.keys():
             self.leg_key = leg_key
-            self.no_noise[leg_key] = self.remove_noise_curvature_flow()
-            self.emphasized[leg_key] = self.get_valley_emphasized_image()
-            self.initial_segmented[leg_key] = self.initial_segmentation()
-            self.segmented_legs[leg_key] = self.get_femur()
-            self.segmented_hips[leg_key] = self.get_hip()
+            emphasized = self.get_valley_emphasized_image()
+            initial_segmentation = self.initial_segmentation(emphasized)
+            otsu_low_threshold = self.otsu_segmentation_low_threshold(emphasized)
+            self.segmented_legs[leg_key] = self.get_femur(initial_segmentation, otsu_low_threshold)
+            self.segmented_hips[leg_key] = self.get_hip(initial_segmentation, otsu_low_threshold)
