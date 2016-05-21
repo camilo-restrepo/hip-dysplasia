@@ -1,11 +1,10 @@
 from image_processing import ImageProcessing
 import matplotlib.pyplot as plt
-from utils import Formatter
 
 
-# path = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_10_4/"
+path = "/Volumes/Files/imagenes/ALMANZA_RUIZ_JUAN_CARLOS/TAC_DE_PELVIS - 84441/_Bone_10_4/"
 # path = "/Volumes/Files/imagenes/AVILA_MALAGON_ZULMA_IVONNE/TAC_DE_PELVIS_SIMPLE - 89589/_Bone_10_2/"
-path = "/Volumes/Files/imagenes/ALVAREZ_PATINO_SOFIA/PELVIS - 73864/_Bone_10_5/"
+# path = "/Volumes/Files/imagenes/ALVAREZ_PATINO_SOFIA/PELVIS - 73864/_Bone_10_5/"
 # path = "/Volumes/Files/imagenes/CHACON_BARBA_SERGIO_ANDRES/CADERA_SIMPLE - 103000/_Bone_10_4/"
 # path = "/Volumes/Files/imagenes/LOAIZA_ORTIZ_JONATHAN_ESTEVEN/CADERA_IZQUIERDA - 94647/_Bone_10_5/"
 # path = "/Volumes/Files/imagenes/VARGAS_DIAZ_CLAUDIA_PATRICIA/PELVIS_3D - 84024/_Bone_10_5/"

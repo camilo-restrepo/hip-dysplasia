@@ -4,10 +4,11 @@ from skimage.morphology import remove_small_objects, closing, disk, erosion, dil
 from skimage.measure import label, regionprops
 from skimage.segmentation import clear_border
 from skimage.filters import threshold_otsu
+from sklearn import mixture
 from scipy import ndimage as ndi
 import region_growing
 import matplotlib.pyplot as plt
-from skimage.color import label2rgb
+import time
 
 
 class ImageProcessing:
@@ -114,7 +115,7 @@ class ImageProcessing:
     # --------------------------------------------------------------------------------------------------------------------
 
     def initial_segmentation(self, emphasized):
-        binary_img = np.zeros_like(emphasized)
+        binary_img = np.zeros(emphasized.shape)
         for z in range(0, emphasized.shape[0]):
             th = threshold_otsu(emphasized[z, :, :])
             binary_img[z, :, :] = emphasized[z, :, :] > th
@@ -123,22 +124,11 @@ class ImageProcessing:
             th = threshold_otsu(tmp)
             binary_img[z, :, :] = tmp > th
             binary_img[z, :, :] = remove_small_objects(binary_img[z, :, :].astype(bool), 5)
-
-            # print th
-            # if 100 <= z <= image.shape[0]:
-            #     fig = plt.figure(z)
-            #     a = fig.add_subplot(1, 3, 1)
-            #     imgplot = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-            #     a.format_coord = Formatter(image[z, :, :])
-            #     a = fig.add_subplot(1, 3, 2)
-            #     imgplot = plt.imshow(tmp, cmap='Greys_r', interpolation="none")
-            #     a = fig.add_subplot(1, 3, 3)
-            #     imgplot = plt.imshow(binary_img[z, :, :], cmap='Greys_r', interpolation="none")
-            #     plt.show()
+        binary_img = binary_img.astype('i4')
         return binary_img
 
     def otsu_segmentation_low_threshold(self, emphasized):
-        binary_img = np.zeros_like(emphasized)
+        binary_img = np.zeros(emphasized.shape)
         for z in range(0, emphasized.shape[0]):
             th = threshold_otsu(emphasized[z, :, :])
             binary_img[z, :, :] = emphasized[z, :, :] > th
@@ -147,8 +137,8 @@ class ImageProcessing:
             th = threshold_otsu(tmp)
 
             binary_img[z, :, :] = tmp > th - 100
-            # binary_img[z, :, :] = clear_border(binary_img[z, :, :])
             binary_img[z, :, :] = remove_small_objects(binary_img[z, :, :].astype(bool), 5)
+        binary_img = binary_img.astype('i4')
         return binary_img
 
     def get_femur(self, initial_segmentation, otsu_low_threshold):
@@ -181,25 +171,12 @@ class ImageProcessing:
 
             image[z, :, :] = self.fill_holes(image[z, :, :], disk(2), 3)
 
-            # if 100 <= z <= segmented_leg.shape[0]:
-            # if z == 111 or z == 105 or z == 106:
-            #     fig = plt.figure(z)
-            #     fig.add_subplot(1, 4, 1)
-            #     plt.imshow(segmented_leg[z, :, :], cmap='Greys_r', interpolation="none")
-            #     fig.add_subplot(1, 4, 2)
-            #     plt.imshow(image[z - 1, :, :], cmap='Greys_r', interpolation="none")
-            #     fig.add_subplot(1, 4, 3)
-            #     plt.imshow(image[z - 1, :, :] + segmented_leg[z, :, :], cmap='Greys_r', interpolation="none")
-            #     fig.add_subplot(1, 4, 4)
-            #     plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-            #     plt.show()
-
         if self.leg_key == self.LEFT_LEG:
             for z in range(0, image.shape[0]):
                 image[z, :, :] = np.fliplr(image[z, :, :])
 
-        result = np.zeros_like(otsu_low_threshold)
-        for z in range(0, otsu_low_threshold.shape[0]):
+        result = np.zeros_like(image)
+        for z in range(0, image.shape[0]):
             seed_points = set()
             white_pxs = np.argwhere(image[z, :, :] == 1)
             for px in white_pxs:
@@ -211,21 +188,7 @@ class ImageProcessing:
                 result[z, px[1], px[2]] = 1
 
             result[z, :, :] = self.fill_holes(result[z, :, :], disk(2), 1)
-
-            # if 44 <= z <= image.shape[0] and self.leg_key == self.LEFT_LEG:
-            # if z == 111 or z == 105 or z == 106:
-            #     fig = plt.figure(z)
-            #     a = fig.add_subplot(1, 4, 1)
-            #     imgplot = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-            #     a.format_coord = Formatter(image[z, :, :])
-            #     a = fig.add_subplot(1, 4, 2)
-            #     imgplot = plt.imshow(binary_img[z, :, :], cmap='Greys_r', interpolation="none")
-            #     a = fig.add_subplot(1, 4, 3)
-            #     imgplot = plt.imshow(image[z, :, :] + binary_img[z, :, :], cmap='Greys_r', interpolation="none")
-            #     a = fig.add_subplot(1, 4, 4)
-            #     imgplot = plt.imshow(result[z, :, :], cmap='Greys_r', interpolation="none")
-            #     plt.show()
-
+        result = result.astype('i4')
         return result
 
     def get_hip(self, femur, initial_segmentation, otsu_low_threshold):
@@ -284,55 +247,108 @@ class ImageProcessing:
             result[z, :, :] = self.fill_holes(result[z, :, :], disk(1), 1)
             result[z, :, :] = remove_small_objects(result[z, :, :].astype(bool), 150)
 
-            # if 100 <= z <= result.shape[0]:
-            #     fig = plt.figure(z)
-            #     fig.add_subplot(1, 2, 1)
-            #     plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-            #     fig.add_subplot(1, 2, 2)
-            #     plt.imshow(result[z, :, :], cmap='Greys_r', interpolation="none")
-            #     plt.show()
-
+        result = result.astype('i4')
         return result
 
-    def refine_femur_segmentation(self, otsu_low_threshold, femur):
-        last_femur_slice = 0
-        hip = self.segmented_hips[self.leg_key]
-        for z in range(0, femur.shape[0]):
-            if np.any(femur[z, :, :] == 1):
-                last_femur_slice = z
-            else:
-                break
-
+    def refine_femur_segmentation(self, otsu_low_threshold, emphasized_img):
+        hip = self.segmented_hips[self.leg_key].copy()
         image = otsu_low_threshold - hip
         image[image < 0] = 0
+
+        hip[hip == 1] = 2
+        hip[hip == 0] = 1
+        hip[hip == 2] = 0
+        no_hip = np.multiply(hip, emphasized_img)
+        no_hip[no_hip < 0] = 0
 
         if self.leg_key == self.LEFT_LEG:
             for z in range(0, image.shape[0]):
                 image[z, :, :] = np.fliplr(image[z, :, :])
+                no_hip[z, :, :] = np.fliplr(no_hip[z, :, :])
 
-        for z in range(0, last_femur_slice + 1):
+        for z in range(0, image.shape[0]):
             image[z, 230:, :] = 0
             image[z, :50, :] = 0
             image[z, :, 200:] = 0
 
         image = self.clean_by_area(image)
-        for z in range(0, last_femur_slice + 1):
+
+        for z in range(0, image.shape[0]):
             image[z, :, :] = self.fill_holes(image[z, :, :], disk(1), 3)
+
+        label_image = label(image)
+        min_row, min_col, max_row, max_col = 0, 0, 0, 0
+        max_area = 0
+        for z in range(0, image.shape[0]):
+            regions = regionprops(label_image[z, :, :])
+            for region in regions:
+                if region.area > max_area:
+                    min_row, min_col, max_row, max_col = region.bbox
+                    max_area = region.area
+
+        rect_width = max_col - min_col
+        rect_height = max_row - min_row
+
+        image = image.astype('i4')
+
+        for z in range(0, image.shape[0]):
+            regions = regionprops(label_image[z, :, :])
+            x, y = 0, 0
+            for region in regions:
+                x, y = region.centroid[0], region.centroid[1]
+            min_row1, min_col1 = int(x - (rect_height / 2)), int(y - (rect_width / 2))
+            max_row1, max_col1 = int(x + (rect_height / 2)), int(y + (rect_width / 2))
+
+            training = no_hip[z, min_row1:max_row1 + 1, min_col1 - 10:max_col1 + 20]
+            if training.size > 0:
+                gmm_nohip = mixture.GMM(n_components=4)
+                gmm_nohip.fit(np.reshape(training, (-1, 1)))
+                means = gmm_nohip.means_.ravel()
+                pixeles = no_hip[z, min_row1 - 10:max_row1 + 10, min_col1 - 10:max_col1 + 20]
+                predictions = np.reshape(gmm_nohip.predict(np.reshape(pixeles, (-1, 1))), pixeles.shape)
+
+                predictions_img = np.zeros((no_hip.shape[1], no_hip.shape[2]))
+                predictions_img[min_row1 - 10:max_row1 + 10, min_col1 - 10:max_col1 + 20] = predictions
+
+                for idx, m in enumerate(means):
+                    predictions_img[predictions_img == idx] = m
+
+                sorted_meand = np.sort(means)
+                for idx, m in enumerate(sorted_meand):
+                    if idx < 2:
+                        predictions_img[predictions_img == m] = 0
+                    else:
+                        predictions_img[predictions_img == m] = 1
+
+                predictions_img[:min_row1 - 10, :] = 0
+                predictions_img[max_row1 + 10:, :] = 0
+                predictions_img[:, :min_col1 - 10] = 0
+                predictions_img[:, max_col1 + 20:] = 0
+
+                predictions_img = predictions_img.astype('i4')
+                tmp = predictions_img + image[z, :, :]
+                tmp[tmp != 0] = 1
+                tmp = ndi.binary_fill_holes(tmp)
+                tmp = remove_small_objects(tmp.astype(bool), 100)
+                image[z, :, :] = tmp.astype('i4')
+                last_z = z
+            else:
+                break
+
+        image = self.clean_by_area(image)
 
         if self.leg_key == self.LEFT_LEG:
             for z in range(0, image.shape[0]):
                 image[z, :, :] = np.fliplr(image[z, :, :])
 
-        image[last_femur_slice+1:, :, :] = 0
-
-        # for z in range(0, last_femur_slice + 1):
-            # if 120 <= z <= last_femur_slice:
-            #     fig = plt.figure(z)
-            #     a = fig.add_subplot(1, 2, 1)
-            #     img = plt.imshow(otsu_low_threshold[z, :, :], cmap='Greys_r', interpolation="none")
-            #     a = fig.add_subplot(1, 2, 2)
-            #     img = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-            #     plt.show()
+        # for z in range(0, last_z):
+        #     if z > 110:
+        #         fig = plt.figure(z)
+        #         a = fig.add_subplot(1, 2, 1)
+        #         img = plt.imshow(emphasized_img[z, :, :], cmap='Greys_r', interpolation="none")
+        #         a = fig.add_subplot(1, 2, 2)
+        #         img = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
+        #         plt.show()
 
         return image
 
@@ -373,16 +389,6 @@ class ImageProcessing:
                         for coords in region.coords:
                             image[z, coords[0], coords[1]] = 0
 
-            # if 120 <= z <= 150:
-            #     image_label_overlay = label2rgb(label_image, image=image[z, :, :])
-            #
-            #     fig = plt.figure(z)
-            #     a = fig.add_subplot(1, 2, 1)
-            #     img = plt.imshow(image_label_overlay, interpolation="none")
-            #     a = fig.add_subplot(1, 2, 2)
-            #     img = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-            #     plt.show()
-
         return image
 
 
@@ -393,13 +399,34 @@ class ImageProcessing:
     def execute(self, folder_path):
         self.initialize()
         self.PathDicom = folder_path
+        start = time.time()
         self.legs = self.get_legs()
+        stop = time.time()
+        print 'legs: ', (stop - start)
 
         for leg_key in self.legs.keys():
             self.leg_key = leg_key
+            start = time.time()
             emphasized = self.get_valley_emphasized_image()
+            stop = time.time()
+            print 'emphasized: ', (stop - start)
+            start = time.time()
             initial_segmentation = self.initial_segmentation(emphasized)
+            stop = time.time()
+            print 'initial: ', (stop - start)
+            start = time.time()
             otsu_low_threshold = self.otsu_segmentation_low_threshold(emphasized)
+            stop = time.time()
+            print 'otsu: ', (stop - start)
+            start = time.time()
             femur = self.get_femur(initial_segmentation, otsu_low_threshold)
+            stop = time.time()
+            print 'femur: ', (stop - start)
+            start = time.time()
             self.segmented_hips[leg_key] = self.get_hip(femur, initial_segmentation, otsu_low_threshold)
-            self.segmented_legs[leg_key] = self.refine_femur_segmentation(otsu_low_threshold, femur)
+            stop = time.time()
+            print 'hip: ', (stop - start)
+            start = time.time()
+            self.segmented_legs[leg_key] = self.refine_femur_segmentation(otsu_low_threshold, emphasized)
+            stop = time.time()
+            print 'leg: ', (stop - start)

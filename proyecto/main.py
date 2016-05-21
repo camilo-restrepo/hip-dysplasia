@@ -20,10 +20,19 @@ class MainWindow(QtGui.QMainWindow):
         self.vtkWidget_left_femur = QVTKRenderWindowInteractor(self.frame)
         self.vtkWidget_left_hip = QVTKRenderWindowInteractor(self.frame)
 
-        self.vl.addWidget(self.vtkWidget_right_femur, 0, 0)
-        self.vl.addWidget(self.vtkWidget_right_hip, 0, 1)
-        self.vl.addWidget(self.vtkWidget_left_femur, 1, 0)
-        self.vl.addWidget(self.vtkWidget_left_hip, 1, 1)
+        title_right_femur = QtGui.QLabel('Femur derecho')
+        title_right_hip = QtGui.QLabel('Cadera derecha')
+        title_left_femur = QtGui.QLabel('Femur izquierdo')
+        title_left_hip = QtGui.QLabel('Cadera izquierda')
+        self.vl.addWidget(title_right_femur, 0, 0)
+        self.vl.addWidget(self.vtkWidget_right_femur, 1, 0)
+        self.vl.addWidget(title_right_hip, 0, 1)
+        self.vl.addWidget(self.vtkWidget_right_hip, 1, 1)
+
+        self.vl.addWidget(title_left_femur, 2, 0)
+        self.vl.addWidget(self.vtkWidget_left_femur, 3, 0)
+        self.vl.addWidget(title_left_hip, 2, 1)
+        self.vl.addWidget(self.vtkWidget_left_hip, 3, 1)
 
         self.ren_right_femur = vtk.vtkRenderer()
         self.ren_right_hip = vtk.vtkRenderer()
@@ -129,17 +138,17 @@ class MainWindow(QtGui.QMainWindow):
         dmc.GenerateValues(1, 1, 1)
         dmc.Update()
 
-        smoothingIterations = 15
-        passBand = 0.001
-        featureAngle = 120.0
+        smoothing_iterations = 15
+        pass_band = 0.001
+        feature_angle = 120.0
 
         smoother = vtk.vtkWindowedSincPolyDataFilter()
         smoother.SetInputConnection(dmc.GetOutputPort())
-        smoother.SetNumberOfIterations(smoothingIterations)
+        smoother.SetNumberOfIterations(smoothing_iterations)
         smoother.BoundarySmoothingOff()
         smoother.FeatureEdgeSmoothingOff()
-        smoother.SetFeatureAngle(featureAngle)
-        smoother.SetPassBand(passBand)
+        smoother.SetFeatureAngle(feature_angle)
+        smoother.SetPassBand(pass_band)
         smoother.NonManifoldSmoothingOn()
         smoother.NormalizeCoordinatesOn()
         smoother.Update()
