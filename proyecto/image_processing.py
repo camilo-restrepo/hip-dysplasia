@@ -290,7 +290,7 @@ class ImageProcessing:
         rect_height = max_row - min_row
 
         image = image.astype('i4')
-
+        last_z = 0
         for z in range(0, image.shape[0]):
             regions = regionprops(label_image[z, :, :])
             x, y = 0, 0
@@ -331,6 +331,7 @@ class ImageProcessing:
                 tmp = ndi.binary_fill_holes(tmp)
                 tmp = remove_small_objects(tmp.astype(bool), 100)
                 image[z, :, :] = tmp.astype('i4')
+                image[z, :, :] = ndi.filters.median_filter(image[z, :, :], size=(3, 3))
                 last_z = z
             else:
                 break
