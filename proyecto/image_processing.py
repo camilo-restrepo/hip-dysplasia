@@ -7,7 +7,6 @@ from skimage.filters import threshold_otsu
 from sklearn import mixture
 from scipy import ndimage as ndi
 import region_growing
-import matplotlib.pyplot as plt
 import time
 
 
@@ -191,7 +190,7 @@ class ImageProcessing:
         result = result.astype('i4')
         return result
 
-    def get_hip(self, femur, initial_segmentation, otsu_low_threshold):
+    def get_hip(self, femur, initial_segmentation, otsu_low_threshold, emphasized_img):
         last_femur_slice = 0
         removed_elems = False
         for z in range(0, femur.shape[0]):
@@ -248,6 +247,84 @@ class ImageProcessing:
             result[z, :, :] = remove_small_objects(result[z, :, :].astype(bool), 150)
 
         result = result.astype('i4')
+
+        label_image = label(result)
+        femur_img = femur.copy()
+        femur_img[femur_img == 1] = 2
+        femur_img[femur_img == 0] = 1
+        femur_img[femur_img == 2] = 0
+        spine = otsu_low_threshold - femur - result
+        spine[spine == 1] = 2
+        spine[spine == 0] = 1
+        spine[spine == 2] = 0
+
+        no_femur = np.multiply(femur_img, emphasized_img)
+        no_femur = np.multiply(no_femur, spine)
+        no_femur[no_femur < 0] = 0
+
+        for z in range(0, result.shape[0]):
+            regions = regionprops(label_image[z, :, :])
+            for region in regions:
+                minr, minc, maxr, maxc = region.bbox
+                if minr - 5 > 0:
+                    minr -= 5
+                if minc - 10 > 0:
+                    minc -= 10
+                if maxr + 5 < 256:
+                    maxr += 5
+                if maxc + 5 < 256:
+                    maxc += 5
+
+                training = no_femur[z, minr:maxr + 1, minc:maxc+1]
+
+                if training.size > 0:
+                    gmm_nohip = mixture.GMM(n_components=4)
+                    gmm_nohip.fit(np.reshape(training, (-1, 1)))
+                    means = gmm_nohip.means_.ravel()
+
+                    pixeles = no_femur[z, minr:maxr + 1, minc:maxc+1]
+                    predictions = np.reshape(gmm_nohip.predict(np.reshape(pixeles, (-1, 1))), pixeles.shape)
+                    predictions_img = np.zeros((no_femur.shape[1], no_femur.shape[2]))
+                    predictions_img[minr:maxr + 1, minc:maxc+1] = predictions
+
+                    for idx, m in enumerate(means):
+                        predictions_img[predictions_img == idx] = m
+
+                    sorted_means = np.sort(means)
+                    for idx, m in enumerate(sorted_means):
+                        if idx < 2:
+                            predictions_img[predictions_img == m] = 0
+                        else:
+                            predictions_img[predictions_img == m] = 1
+
+                    predictions_img[:minr, :] = 0
+                    predictions_img[maxr:, :] = 0
+                    predictions_img[:, :minc] = 0
+                    predictions_img[:, maxc:] = 0
+
+                    predictions_img = predictions_img.astype('i4')
+                    tmp = predictions_img + result[z, :, :]
+                    tmp[tmp != 0] = 1
+                    tmp = remove_small_objects(tmp.astype(bool), 100)
+                    tmp = ndi.binary_fill_holes(tmp)
+                    result[z, :, :] = tmp.astype('i4')
+                    result[z, :, :] = ndi.filters.median_filter(result[z, :, :], size=(3, 3))
+
+        label_image = label(result)
+        regions = regionprops(label_image[0, :, :])
+        it = 1
+        while len(regions) == 0:
+            regions = regionprops(label_image[it, :, :])
+            it += 1
+
+        initial_label = regions[0].label
+        for z in range(it, image.shape[0]):
+            regions = regionprops(label_image[z, :, :])
+            for region in regions:
+                if region.label != initial_label:
+                    for coords in region.coords:
+                        result[z, coords[0], coords[1]] = 0
+
         return result
 
     def refine_femur_segmentation(self, otsu_low_threshold, emphasized_img):
@@ -290,7 +367,7 @@ class ImageProcessing:
         rect_height = max_row - min_row
 
         image = image.astype('i4')
-        last_z = 0
+
         for z in range(0, image.shape[0]):
             regions = regionprops(label_image[z, :, :])
             x, y = 0, 0
@@ -313,8 +390,8 @@ class ImageProcessing:
                 for idx, m in enumerate(means):
                     predictions_img[predictions_img == idx] = m
 
-                sorted_meand = np.sort(means)
-                for idx, m in enumerate(sorted_meand):
+                sorted_means = np.sort(means)
+                for idx, m in enumerate(sorted_means):
                     if idx < 2:
                         predictions_img[predictions_img == m] = 0
                     else:
@@ -332,7 +409,6 @@ class ImageProcessing:
                 tmp = remove_small_objects(tmp.astype(bool), 100)
                 image[z, :, :] = tmp.astype('i4')
                 image[z, :, :] = ndi.filters.median_filter(image[z, :, :], size=(3, 3))
-                last_z = z
             else:
                 break
 
@@ -341,15 +417,6 @@ class ImageProcessing:
         if self.leg_key == self.LEFT_LEG:
             for z in range(0, image.shape[0]):
                 image[z, :, :] = np.fliplr(image[z, :, :])
-
-        # for z in range(0, last_z):
-        #     if z > 110:
-        #         fig = plt.figure(z)
-        #         a = fig.add_subplot(1, 2, 1)
-        #         img = plt.imshow(emphasized_img[z, :, :], cmap='Greys_r', interpolation="none")
-        #         a = fig.add_subplot(1, 2, 2)
-        #         img = plt.imshow(image[z, :, :], cmap='Greys_r', interpolation="none")
-        #         plt.show()
 
         return image
 
@@ -424,7 +491,7 @@ class ImageProcessing:
             stop = time.time()
             print 'femur: ', (stop - start)
             start = time.time()
-            self.segmented_hips[leg_key] = self.get_hip(femur, initial_segmentation, otsu_low_threshold)
+            self.segmented_hips[leg_key] = self.get_hip(femur, initial_segmentation, otsu_low_threshold, emphasized)
             stop = time.time()
             print 'hip: ', (stop - start)
             start = time.time()
